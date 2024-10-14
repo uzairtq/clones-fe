@@ -4,46 +4,50 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Fusion App</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
 </head>
-<body class="bg-gray-100 min-h-screen">
-    <div class="container mx-auto p-4">
-        <h1 class="text-3xl font-bold mb-6 text-center">Video Fusion App</h1>
+<body class="bg-dark text-light">
+    <div class="container py-4">
+        <h1 class="display-4 mb-4 text-center">Video Fusion App</h1>
         
-        <div class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
-            <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-bold mb-2" for="personal-video">
-                    Personal Video
-                </label>
-                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="personal-video" type="file" accept="video/*">
-                <button class="mt-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" id="record-video">
-                    Record Video
-                </button>
-            </div>
-            
-            <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-bold mb-2" for="youtube-url">
-                    YouTube URL (Reference Video)
-                </label>
-                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="youtube-url" type="url" placeholder="https://www.youtube.com/watch?v=...">
-            </div>
-            
-            <div class="flex justify-between mb-4">
-                <div id="personal-video-info" class="w-1/2 mr-2"></div>
-                <div id="youtube-video-info" class="w-1/2 ml-2"></div>
-            </div>
-            
-            <div class="flex items-center justify-center">
-                <button class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" id="fuse-button">
-                    Fuse 'em
-                </button>
+        <div class="card bg-secondary mb-4">
+            <div class="card-body">
+                <form id="video-form" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label" for="personal-video">Personal Video</label>
+                        <input class="form-control" id="personal-video" name="personal_video" type="file" accept="video/*">
+                        <button type="button" class="btn btn-primary mt-2" id="record-video">Record Video</button>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Reference Video</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="reference-video-type" id="youtube-option" value="youtube" checked>
+                            <label class="form-check-label" for="youtube-option">YouTube URL</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="reference-video-type" id="file-option" value="file">
+                            <label class="form-check-label" for="file-option">Upload Video File</label>
+                        </div>
+                        <input class="form-control mt-2" id="youtube-url" name="youtube_url" type="url" placeholder="https://www.youtube.com/watch?v=...">
+                        <input class="form-control mt-2 d-none" id="reference-video-file" name="reference_video" type="file" accept="video/*">
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6" id="personal-video-info"></div>
+                        <div class="col-md-6" id="reference-video-info"></div>
+                    </div>
+                    
+                    <div class="text-center">
+                        <button type="submit" class="btn btn-success" id="fuse-button">Fuse 'em</button>
+                    </div>
+                </form>
             </div>
         </div>
         
-        <div id="result" class="mt-8 hidden">
-            <h2 class="text-2xl font-bold mb-4">Fused Video</h2>
-            <video id="fused-video" controls class="w-full max-w-3xl mx-auto">
+        <div id="result" class="mt-4 d-none">
+            <h2 class="h3 mb-3">Fused Video</h2>
+            <video id="fused-video" controls class="w-100">
                 Your browser does not support the video tag.
             </video>
         </div>
