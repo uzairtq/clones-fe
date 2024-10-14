@@ -30,6 +30,9 @@ try:
         region_name=S3_REGION
     )
     logger.info("S3 client initialized successfully")
+    logger.info(f"AWS_ACCESS_KEY_ID length: {len(os.environ.get('AWS_ACCESS_KEY_ID', ''))}")
+    logger.info(f"AWS_SECRET_ACCESS_KEY length: {len(os.environ.get('AWS_SECRET_ACCESS_KEY', ''))}")
+    logger.info(f"S3_BUCKET: {S3_BUCKET}")
 except Exception as e:
     logger.error(f"Failed to initialize S3 client: {str(e)}")
     s3_client = None
@@ -52,8 +55,8 @@ def upload_to_s3(file, bucket, s3_file):
         s3_client.upload_fileobj(file, bucket, s3_file)
         logger.info(f"File uploaded successfully to S3: {s3_file}")
         return f"https://{bucket}.s3.{S3_REGION}.amazonaws.com/{s3_file}"
-    except NoCredentialsError:
-        logger.error("AWS credentials not found or invalid")
+    except NoCredentialsError as e:
+        logger.error(f"AWS credentials not found or invalid: {str(e)}")
         return None
     except ClientError as e:
         error_code = e.response['Error']['Code']
@@ -70,17 +73,38 @@ def test_s3_connection():
         return False
 
     try:
-        s3_client.list_buckets()
+        response = s3_client.list_buckets()
         logger.info("S3 connection test successful")
+        logger.info(f"Available buckets: {[bucket['Name'] for bucket in response['Buckets']]}")
         return True
     except Exception as e:
         logger.error(f"S3 connection test failed: {str(e)}")
+        return False
+
+def list_s3_bucket_contents():
+    if not s3_client:
+        logger.error("S3 client not initialized")
+        return False
+
+    try:
+        response = s3_client.list_objects_v2(Bucket=S3_BUCKET)
+        if 'Contents' in response:
+            logger.info(f"S3 bucket {S3_BUCKET} contents:")
+            for obj in response['Contents']:
+                logger.info(f"- {obj['Key']}")
+        else:
+            logger.info(f"S3 bucket {S3_BUCKET} is empty")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to list S3 bucket contents: {str(e)}")
         return False
 
 @app.route('/process_videos', methods=['POST'])
 def process_videos():
     if not test_s3_connection():
         return jsonify({'status': 'error', 'message': 'S3 connection failed'}), 500
+
+    list_s3_bucket_contents()
 
     personal_video = request.files.get('personal_video')
     reference_video = request.files.get('reference_video')
