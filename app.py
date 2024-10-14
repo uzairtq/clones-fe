@@ -19,9 +19,10 @@ logger = logging.getLogger(__name__)
 
 # AWS S3 configuration
 S3_BUCKET = os.environ.get('S3_BUCKET')
-S3_REGION = os.environ.get('S3_REGION', 'us-east-1')
+S3_REGION = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
 
 # Initialize S3 client
+s3_client = None
 try:
     s3_client = boto3.client(
         's3',
@@ -33,9 +34,9 @@ try:
     logger.info(f"AWS_ACCESS_KEY_ID length: {len(os.environ.get('AWS_ACCESS_KEY_ID', ''))}")
     logger.info(f"AWS_SECRET_ACCESS_KEY length: {len(os.environ.get('AWS_SECRET_ACCESS_KEY', ''))}")
     logger.info(f"S3_BUCKET: {S3_BUCKET}")
+    logger.info(f"S3_REGION: {S3_REGION}")
 except Exception as e:
     logger.error(f"Failed to initialize S3 client: {str(e)}")
-    s3_client = None
 
 db.init_app(app)
 
@@ -45,6 +46,24 @@ with app.app_context():
 @app.route('/')
 def index():
     return render_template('index.html')
+
+def test_aws_credentials():
+    if not s3_client:
+        logger.error("S3 client not initialized")
+        return False, "S3 client not initialized"
+
+    try:
+        s3_client.list_buckets()
+        logger.info("AWS credentials test successful")
+        return True, "AWS credentials test successful"
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        error_message = e.response['Error']['Message']
+        logger.error(f"AWS credentials test failed: {error_code} - {error_message}")
+        return False, f"AWS credentials test failed: {error_code} - {error_message}"
+    except Exception as e:
+        logger.error(f"AWS credentials test failed: {str(e)}")
+        return False, f"AWS credentials test failed: {str(e)}"
 
 def upload_to_s3(file, bucket, s3_file):
     if not s3_client:
@@ -67,44 +86,11 @@ def upload_to_s3(file, bucket, s3_file):
         logger.error(f"Error uploading to S3: {str(e)}")
         return None
 
-def test_s3_connection():
-    if not s3_client:
-        logger.error("S3 client not initialized")
-        return False
-
-    try:
-        response = s3_client.list_buckets()
-        logger.info("S3 connection test successful")
-        logger.info(f"Available buckets: {[bucket['Name'] for bucket in response['Buckets']]}")
-        return True
-    except Exception as e:
-        logger.error(f"S3 connection test failed: {str(e)}")
-        return False
-
-def list_s3_bucket_contents():
-    if not s3_client:
-        logger.error("S3 client not initialized")
-        return False
-
-    try:
-        response = s3_client.list_objects_v2(Bucket=S3_BUCKET)
-        if 'Contents' in response:
-            logger.info(f"S3 bucket {S3_BUCKET} contents:")
-            for obj in response['Contents']:
-                logger.info(f"- {obj['Key']}")
-        else:
-            logger.info(f"S3 bucket {S3_BUCKET} is empty")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to list S3 bucket contents: {str(e)}")
-        return False
-
 @app.route('/process_videos', methods=['POST'])
 def process_videos():
-    if not test_s3_connection():
-        return jsonify({'status': 'error', 'message': 'S3 connection failed'}), 500
-
-    list_s3_bucket_contents()
+    aws_creds_test, aws_creds_message = test_aws_credentials()
+    if not aws_creds_test:
+        return jsonify({'status': 'error', 'message': f'AWS credentials test failed: {aws_creds_message}'}), 500
 
     personal_video = request.files.get('personal_video')
     reference_video = request.files.get('reference_video')
