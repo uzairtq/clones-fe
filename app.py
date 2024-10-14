@@ -1,10 +1,11 @@
 import os
+import logging
 from flask import Flask, render_template, request, jsonify
 from models import db, Video
 from utils.youtube_api import get_youtube_video_info
 from werkzeug.utils import secure_filename
 import boto3
-from botocore.exceptions import NoCredentialsError
+from botocore.exceptions import NoCredentialsError, ClientError
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///videos.db'
@@ -12,17 +13,26 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or "a secret key"
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # AWS S3 configuration
 S3_BUCKET = os.environ.get('S3_BUCKET')
 S3_REGION = os.environ.get('S3_REGION', 'us-east-1')
 
 # Initialize S3 client
-s3_client = boto3.client(
-    's3',
-    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-    region_name=S3_REGION
-)
+try:
+    s3_client = boto3.client(
+        's3',
+        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+        region_name=S3_REGION
+    )
+    logger.info("S3 client initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize S3 client: {str(e)}")
+    s3_client = None
 
 db.init_app(app)
 
@@ -34,17 +44,44 @@ def index():
     return render_template('index.html')
 
 def upload_to_s3(file, bucket, s3_file):
+    if not s3_client:
+        logger.error("S3 client not initialized")
+        return None
+
     try:
         s3_client.upload_fileobj(file, bucket, s3_file)
+        logger.info(f"File uploaded successfully to S3: {s3_file}")
         return f"https://{bucket}.s3.{S3_REGION}.amazonaws.com/{s3_file}"
     except NoCredentialsError:
+        logger.error("AWS credentials not found or invalid")
+        return None
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        error_message = e.response['Error']['Message']
+        logger.error(f"AWS S3 ClientError: {error_code} - {error_message}")
         return None
     except Exception as e:
-        print(f"Error uploading to S3: {str(e)}")
+        logger.error(f"Error uploading to S3: {str(e)}")
         return None
+
+def test_s3_connection():
+    if not s3_client:
+        logger.error("S3 client not initialized")
+        return False
+
+    try:
+        s3_client.list_buckets()
+        logger.info("S3 connection test successful")
+        return True
+    except Exception as e:
+        logger.error(f"S3 connection test failed: {str(e)}")
+        return False
 
 @app.route('/process_videos', methods=['POST'])
 def process_videos():
+    if not test_s3_connection():
+        return jsonify({'status': 'error', 'message': 'S3 connection failed'}), 500
+
     personal_video = request.files.get('personal_video')
     reference_video = request.files.get('reference_video')
     youtube_url = request.form.get('youtube_url')
