@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Fusion App</title>
     <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <style>
+        #video-preview {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
 </head>
 <body class="bg-dark text-light">
     <div class="container py-4">
@@ -16,7 +22,11 @@
                     <div class="mb-3">
                         <label class="form-label" for="personal-video">Personal Video</label>
                         <input class="form-control" id="personal-video" name="personal_video" type="file" accept="video/*">
-                        <button type="button" class="btn btn-primary mt-2" id="record-video">Record Video</button>
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-primary" id="record-video">Record Video</button>
+                            <button type="button" class="btn btn-danger d-none" id="stop-recording">Stop Recording</button>
+                        </div>
+                        <video id="video-preview" class="mt-2 d-none" autoplay muted></video>
                     </div>
                     
                     <div class="mb-3">

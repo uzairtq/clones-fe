@@ -2,6 +2,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const videoForm = document.getElementById('video-form');
     const personalVideoInput = document.getElementById('personal-video');
     const recordVideoButton = document.getElementById('record-video');
+    const stopRecordingButton = document.getElementById('stop-recording');
+    const videoPreview = document.getElementById('video-preview');
     const youtubeUrlInput = document.getElementById('youtube-url');
     const referenceVideoFileInput = document.getElementById('reference-video-file');
     const youtubeOption = document.getElementById('youtube-option');
@@ -13,13 +15,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let mediaRecorder;
     let recordedChunks = [];
+    let stream;
 
-    recordVideoButton.addEventListener('click', async () => {
+    recordVideoButton.addEventListener('click', startRecording);
+    stopRecordingButton.addEventListener('click', stopRecording);
+
+    async function startRecording() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            const videoElement = document.createElement('video');
-            videoElement.srcObject = stream;
-            videoElement.play();
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            videoPreview.srcObject = stream;
+            videoPreview.classList.remove('d-none');
 
             mediaRecorder = new MediaRecorder(stream);
 
@@ -36,18 +41,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 dataTransfer.items.add(file);
                 personalVideoInput.files = dataTransfer.files;
                 updatePersonalVideoInfo();
-                stream.getTracks().forEach(track => track.stop());
             };
 
             mediaRecorder.start();
-            recordVideoButton.textContent = 'Stop Recording';
-            recordVideoButton.classList.remove('btn-primary');
-            recordVideoButton.classList.add('btn-danger');
+            recordVideoButton.classList.add('d-none');
+            stopRecordingButton.classList.remove('d-none');
         } catch (error) {
             console.error('Error accessing camera:', error);
-            alert('Unable to access camera. Please make sure you have granted the necessary permissions.');
+            alert('Unable to access camera. Please make sure you have granted the necessary permissions and that no other application is using the camera.');
         }
-    });
+    }
+
+    function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+            stream.getTracks().forEach(track => track.stop());
+            videoPreview.classList.add('d-none');
+            recordVideoButton.classList.remove('d-none');
+            stopRecordingButton.classList.add('d-none');
+            recordedChunks = [];
+        }
+    }
 
     personalVideoInput.addEventListener('change', updatePersonalVideoInfo);
     youtubeUrlInput.addEventListener('input', updateReferenceVideoInfo);
