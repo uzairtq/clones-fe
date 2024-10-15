@@ -132,7 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function uploadFileToS3(file, uploadUrl) {
-        // For the dummy function, we don't actually upload the file
+        // Note: This is a simulated upload process and not an actual S3 upload
         console.log('Simulating file upload to:', uploadUrl);
     }
 
@@ -166,6 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.status === 'success') {
                     fusedVideo.src = data.fused_video_url;
                     resultSection.classList.remove('d-none');
+                    alert(data.message); // Display the simulated upload message
                 } else {
                     alert('Error processing videos: ' + data.message);
                 }

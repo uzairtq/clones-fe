@@ -51,6 +51,7 @@ def get_upload_url():
 
 @app.route('/process_videos', methods=['POST'])
 def process_videos():
+    # Note: This is a simulated upload process and not an actual S3 upload
     personal_video_s3_key = request.form.get('personal_video_s3_key')
     youtube_url = request.form.get('youtube_url')
 
@@ -83,6 +84,7 @@ def process_videos():
 
     return jsonify({
         'status': 'success',
+        'message': 'Video processing simulated successfully',
         'fused_video_url': fused_video_url
     })
 
