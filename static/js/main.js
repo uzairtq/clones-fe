@@ -141,11 +141,67 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function getUploadUrl(file) {
+        const response = await fetch('/get-upload-url', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                fileName: file.name,
+                fileType: file.type,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to get upload URL');
+        }
+
+        return response.json();
+    }
+
+    async function uploadFileToS3(file, uploadUrl) {
+        const response = await fetch(uploadUrl, {
+            method: 'PUT',
+            body: file,
+            headers: {
+                'Content-Type': file.type,
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to upload file to S3');
+        }
+    }
+
     videoForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const formData = new FormData(videoForm);
+        const formData = new FormData();
 
         try {
+            // Upload personal video
+            const personalVideo = personalVideoInput.files[0];
+            if (!personalVideo) {
+                throw new Error('Personal video is required');
+            }
+
+            const personalVideoUploadData = await getUploadUrl(personalVideo);
+            await uploadFileToS3(personalVideo, personalVideoUploadData.uploadUrl);
+            formData.append('personal_video_s3_key', personalVideoUploadData.s3Key);
+
+            // Upload reference video or add YouTube URL
+            if (youtubeOption.checked) {
+                formData.append('youtube_url', youtubeUrlInput.value);
+            } else {
+                const referenceVideo = referenceVideoFileInput.files[0];
+                if (referenceVideo) {
+                    const referenceVideoUploadData = await getUploadUrl(referenceVideo);
+                    await uploadFileToS3(referenceVideo, referenceVideoUploadData.uploadUrl);
+                    formData.append('reference_video_s3_key', referenceVideoUploadData.s3Key);
+                }
+            }
+
+            // Process videos
             const response = await fetch('/process_videos', {
                 method: 'POST',
                 body: formData

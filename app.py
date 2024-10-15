@@ -6,6 +6,7 @@ from utils.youtube_api import get_youtube_video_info
 from werkzeug.utils import secure_filename
 import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
+from uuid import uuid4
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///videos.db'
@@ -22,21 +23,25 @@ S3_BUCKET = os.environ.get('S3_BUCKET')
 S3_REGION = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
 
 # Initialize S3 client
-s3_client = None
-try:
-    s3_client = boto3.client(
-        's3',
-        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-        region_name=S3_REGION
-    )
-    logger.info("S3 client initialized successfully")
-    logger.info(f"AWS_ACCESS_KEY_ID length: {len(os.environ.get('AWS_ACCESS_KEY_ID', ''))}")
-    logger.info(f"AWS_SECRET_ACCESS_KEY length: {len(os.environ.get('AWS_SECRET_ACCESS_KEY', ''))}")
-    logger.info(f"S3_BUCKET: {S3_BUCKET}")
-    logger.info(f"S3_REGION: {S3_REGION}")
-except Exception as e:
-    logger.error(f"Failed to initialize S3 client: {str(e)}")
+def init_s3_client():
+    try:
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+            region_name=S3_REGION
+        )
+        logger.info("S3 client initialized successfully")
+        logger.info(f"AWS_ACCESS_KEY_ID length: {len(os.environ.get('AWS_ACCESS_KEY_ID', ''))}")
+        logger.info(f"AWS_SECRET_ACCESS_KEY length: {len(os.environ.get('AWS_SECRET_ACCESS_KEY', ''))}")
+        logger.info(f"S3_BUCKET: {S3_BUCKET}")
+        logger.info(f"S3_REGION: {S3_REGION}")
+        return s3_client
+    except Exception as e:
+        logger.error(f"Failed to initialize S3 client: {str(e)}")
+        return None
+
+s3_client = init_s3_client()
 
 db.init_app(app)
 
@@ -65,26 +70,40 @@ def test_aws_credentials():
         logger.error(f"AWS credentials test failed: {str(e)}")
         return False, f"AWS credentials test failed: {str(e)}"
 
-def upload_to_s3(file, bucket, s3_file):
+@app.route('/get-upload-url', methods=['POST'])
+def get_upload_url():
     if not s3_client:
-        logger.error("S3 client not initialized")
-        return None
+        return jsonify({'status': 'error', 'message': 'S3 client not initialized'}), 500
+
+    file_name = request.json.get('fileName')
+    file_type = request.json.get('fileType')
+
+    if not file_name or not file_type:
+        return jsonify({'status': 'error', 'message': 'File name and type are required'}), 400
+
+    file_name = secure_filename(file_name)
+    s3_key = f"uploads/{uuid4()}-{file_name}"
 
     try:
-        s3_client.upload_fileobj(file, bucket, s3_file)
-        logger.info(f"File uploaded successfully to S3: {s3_file}")
-        return f"https://{bucket}.s3.{S3_REGION}.amazonaws.com/{s3_file}"
-    except NoCredentialsError as e:
-        logger.error(f"AWS credentials not found or invalid: {str(e)}")
-        return None
-    except ClientError as e:
-        error_code = e.response['Error']['Code']
-        error_message = e.response['Error']['Message']
-        logger.error(f"AWS S3 ClientError: {error_code} - {error_message}")
-        return None
+        presigned_url = s3_client.generate_presigned_url(
+            'put_object',
+            Params={
+                'Bucket': S3_BUCKET,
+                'Key': s3_key,
+                'ContentType': file_type
+            },
+            ExpiresIn=3600
+        )
+
+        return jsonify({
+            'status': 'success',
+            'filename': file_name,
+            's3Key': s3_key,
+            'uploadUrl': presigned_url
+        })
     except Exception as e:
-        logger.error(f"Error uploading to S3: {str(e)}")
-        return None
+        logger.error(f"Error generating pre-signed URL: {str(e)}")
+        return jsonify({'status': 'error', 'message': 'Failed to generate upload URL'}), 500
 
 @app.route('/process_videos', methods=['POST'])
 def process_videos():
@@ -92,23 +111,14 @@ def process_videos():
     if not aws_creds_test:
         return jsonify({'status': 'error', 'message': f'AWS credentials test failed: {aws_creds_message}'}), 500
 
-    personal_video = request.files.get('personal_video')
-    reference_video = request.files.get('reference_video')
+    personal_video_s3_key = request.form.get('personal_video_s3_key')
+    reference_video_s3_key = request.form.get('reference_video_s3_key')
     youtube_url = request.form.get('youtube_url')
 
-    if not personal_video:
-        return jsonify({'status': 'error', 'message': 'Personal video is required'}), 400
+    if not personal_video_s3_key:
+        return jsonify({'status': 'error', 'message': 'Personal video S3 key is required'}), 400
 
-    # Upload personal video to S3
-    if personal_video.filename:
-        personal_video_filename = secure_filename(personal_video.filename)
-        s3_personal_video_path = f"personal_videos/{personal_video_filename}"
-        personal_video_url = upload_to_s3(personal_video, S3_BUCKET, s3_personal_video_path)
-
-        if not personal_video_url:
-            return jsonify({'status': 'error', 'message': 'Failed to upload personal video to S3'}), 500
-    else:
-        return jsonify({'status': 'error', 'message': 'Invalid personal video file'}), 400
+    personal_video_url = f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/{personal_video_s3_key}"
 
     # Process reference video
     if youtube_url:
@@ -116,19 +126,12 @@ def process_videos():
         reference_video_url = youtube_url
         reference_video_title = youtube_info['title'] if youtube_info else 'Unknown YouTube Video'
         reference_video_thumbnail = youtube_info['thumbnail'] if youtube_info else None
-    elif reference_video:
-        if reference_video.filename:
-            reference_video_filename = secure_filename(reference_video.filename)
-            s3_reference_video_path = f"reference_videos/{reference_video_filename}"
-            reference_video_url = upload_to_s3(reference_video, S3_BUCKET, s3_reference_video_path)
-            if not reference_video_url:
-                return jsonify({'status': 'error', 'message': 'Failed to upload reference video to S3'}), 500
-            reference_video_title = reference_video_filename
-            reference_video_thumbnail = None
-        else:
-            return jsonify({'status': 'error', 'message': 'Invalid reference video file'}), 400
+    elif reference_video_s3_key:
+        reference_video_url = f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/{reference_video_s3_key}"
+        reference_video_title = os.path.basename(reference_video_s3_key)
+        reference_video_thumbnail = None
     else:
-        return jsonify({'status': 'error', 'message': 'Reference video or YouTube URL is required'}), 400
+        return jsonify({'status': 'error', 'message': 'Reference video S3 key or YouTube URL is required'}), 400
 
     # Save video information to database
     new_video = Video(
