@@ -9,26 +9,34 @@ from werkzeug.utils import secure_filename
 from uuid import uuid4
 from urllib.parse import urlparse
 import psutil
+from models import db, Video, FusedVideo
 
 app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///videofusion.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
+
+db.init_app(app)
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Initialize S3 client with error handling
-try:
-    s3_client = boto3.client(
-        's3',
-        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY')
-    )
-except NoCredentialsError:
-    logger.error("AWS credentials not found. Please check your environment variables.")
-    s3_client = None
-except Exception as e:
-    logger.error(f"Error initializing S3 client: {str(e)}")
-    s3_client = None
+def initialize_s3_client():
+    try:
+        return boto3.client(
+            's3',
+            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+            region_name='us-east-1'  # Specify the correct region
+        )
+    except NoCredentialsError:
+        logger.error("AWS credentials not found. Please check your environment variables.")
+        return None
+    except Exception as e:
+        logger.error(f"Error initializing S3 client: {str(e)}")
+        return None
+
+s3_client = initialize_s3_client()
 
 S3_BUCKET = os.environ.get('S3_BUCKET')
 
@@ -53,6 +61,11 @@ def generate_presigned_url(file_name, file_type):
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/gallery')
+def gallery():
+    fused_videos = FusedVideo.query.order_by(FusedVideo.created_at.desc()).all()
+    return render_template('gallery.html', fused_videos=fused_videos)
 
 @app.route('/get-upload-url', methods=['POST'])
 def get_upload_url():
@@ -117,6 +130,15 @@ def process_videos():
         # For now, we'll just return the personal video URL as the fused video
         fused_video_url = personal_video_url
 
+        # Store fused video information in the database
+        new_fused_video = FusedVideo(
+            personal_video_url=personal_video_url,
+            reference_video_url=youtube_url,
+            fused_video_url=fused_video_url
+        )
+        db.session.add(new_fused_video)
+        db.session.commit()
+
         logger.debug("Video processing completed successfully")
         return jsonify({
             'status': 'success',
@@ -140,10 +162,15 @@ def health_check():
     }
 
     # Check S3 connection
+    global s3_client
+    if not s3_client:
+        s3_client = initialize_s3_client()
+
     if not s3_client:
         logger.error("S3 client is not initialized.")
         health_status['s3_status'] = 'ERROR'
         health_status['status'] = 'unhealthy'
+        health_status['s3_error'] = 'S3 client initialization failed'
     else:
         try:
             s3_client.list_buckets()
@@ -152,9 +179,13 @@ def health_check():
             logger.error(f"S3 health check failed: {str(e)}")
             health_status['s3_status'] = 'ERROR'
             health_status['status'] = 'unhealthy'
+            health_status['s3_error'] = str(e)
+            s3_client = None  # Reset the client to force reinitialization on next request
 
     logger.info(f"Health check: {health_status}")
     return jsonify(health_status), 200 if health_status['status'] == 'healthy' else 500
 
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
     app.run(host='0.0.0.0', port=5000)
