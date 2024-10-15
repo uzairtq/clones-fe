@@ -214,8 +214,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     // Update personal video thumbnail
                     const personalThumbnail = document.querySelector('.personal-thumbnail');
-                    if (personalThumbnail) {
+                    if (personalThumbnail && data.personal_video_thumbnail) {
                         personalThumbnail.src = data.personal_video_thumbnail;
+                        personalThumbnail.style.display = 'block';
+                        personalThumbnail.style.maxWidth = '100%';
+                        personalThumbnail.style.height = 'auto';
                     }
 
                     // Update YouTube video info

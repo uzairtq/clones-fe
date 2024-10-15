@@ -1,13 +1,10 @@
 import os
 import logging
-import traceback
-import boto3
-from botocore.exceptions import ClientError, NoCredentialsError
 from flask import Flask, render_template, request, jsonify
+from botocore.exceptions import ClientError
+import boto3
 from utils.youtube_api import get_youtube_video_info
-from werkzeug.utils import secure_filename
-from uuid import uuid4
-from urllib.parse import urlparse
+import traceback
 import psutil
 import isodate
 from moviepy.editor import VideoFileClip
@@ -16,9 +13,13 @@ import io
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB limit
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+S3_BUCKET = os.environ.get('S3_BUCKET')
+s3_client = None
 
 def initialize_s3_client():
     try:
@@ -31,29 +32,23 @@ def initialize_s3_client():
     except NoCredentialsError:
         logger.error("AWS credentials not found. Please check your environment variables.")
         return None
-    except Exception as e:
-        logger.error(f"Error initializing S3 client: {str(e)}")
-        return None
 
 s3_client = initialize_s3_client()
 
-S3_BUCKET = os.environ.get('S3_BUCKET')
-
 def generate_presigned_url(file_name, file_type):
     if not s3_client:
-        logger.error("S3 client is not initialized. Cannot generate presigned URL.")
+        logger.error("S3 client is not initialized")
         return None
 
-    s3_key = f"user-uploads/{file_name}-{uuid4()}"
+    s3_key = f"user-uploads/{file_name}-{os.urandom(16).hex()}"
     try:
-        response = s3_client.generate_presigned_url('put_object',
-                                                    Params={'Bucket': S3_BUCKET,
-                                                            'Key': s3_key,
-                                                            'ContentType': file_type},
-                                                    ExpiresIn=3600)
+        response = s3_client.generate_presigned_url(
+            'put_object',
+            Params={'Bucket': S3_BUCKET, 'Key': s3_key, 'ContentType': file_type},
+            ExpiresIn=3600
+        )
     except ClientError as e:
-        logger.error(f"Error generating presigned URL: {str(e)}")
-        logger.error(traceback.format_exc())
+        logger.error(f"Error generating presigned URL: {e}")
         return None
     return {'uploadUrl': response, 's3Key': s3_key}
 
@@ -63,35 +58,30 @@ def generate_thumbnail(video_url):
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=video_url.split(f"{S3_BUCKET}/")[1])
         video_data = response['Body'].read()
 
-        # Save the video file temporarily
-        temp_video_path = '/tmp/temp_video.mp4'
-        with open(temp_video_path, 'wb') as f:
-            f.write(video_data)
+        # Use BytesIO instead of a temporary file
+        video_buffer = io.BytesIO(video_data)
 
         # Generate thumbnail
-        clip = VideoFileClip(temp_video_path)
-        thumbnail_frame = clip.get_frame(1)  # Get frame at 1 second
-        thumbnail_image = Image.fromarray(thumbnail_frame)
+        with VideoFileClip(video_buffer.read()) as clip:
+            thumbnail_frame = clip.get_frame(1)  # Get frame at 1 second
+            thumbnail_image = Image.fromarray(thumbnail_frame)
 
-        # Resize thumbnail
-        thumbnail_image.thumbnail((320, 240))
+            # Resize thumbnail to a larger size
+            thumbnail_image.thumbnail((640, 480))
 
-        # Save thumbnail to bytes
-        thumbnail_bytes = io.BytesIO()
-        thumbnail_image.save(thumbnail_bytes, format='JPEG')
-        thumbnail_bytes.seek(0)
+            # Save thumbnail to bytes
+            thumbnail_bytes = io.BytesIO()
+            thumbnail_image.save(thumbnail_bytes, format='JPEG')
+            thumbnail_bytes.seek(0)
 
         # Upload thumbnail to S3
         thumbnail_key = f"thumbnails/{os.path.basename(video_url).split('.')[0]}.jpg"
         s3_client.put_object(Bucket=S3_BUCKET, Key=thumbnail_key, Body=thumbnail_bytes, ContentType='image/jpeg')
 
-        # Clean up
-        clip.close()
-        os.remove(temp_video_path)
-
         return f"https://{S3_BUCKET}.s3.amazonaws.com/{thumbnail_key}"
     except Exception as e:
         logger.error(f"Error generating thumbnail: {str(e)}")
+        logger.error(traceback.format_exc())
         return None
 
 @app.route('/')
