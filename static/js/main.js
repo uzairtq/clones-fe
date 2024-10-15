@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const personalVideoInput = document.getElementById('personal-video');
     const recordVideoButton = document.getElementById('record-video');
     const stopRecordingButton = document.getElementById('stop-recording');
+    const playRecordedVideoButton = document.getElementById('play-recorded-video');
     const videoPreview = document.getElementById('video-preview');
     const youtubeUrlInput = document.getElementById('youtube-url');
     const personalVideoInfo = document.getElementById('personal-video-info');
@@ -16,12 +17,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let mediaRecorder;
     let recordedChunks = [];
     let stream;
+    let recordedVideoBlob;
 
     if (recordVideoButton) {
         recordVideoButton.addEventListener('click', startRecording);
     }
     if (stopRecordingButton) {
         stopRecordingButton.addEventListener('click', stopRecording);
+    }
+    if (playRecordedVideoButton) {
+        playRecordedVideoButton.addEventListener('click', playRecordedVideo);
     }
 
     async function startRecording() {
@@ -39,12 +44,13 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                const file = new File([blob], 'recorded_video.webm', { type: 'video/webm' });
+                recordedVideoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                const file = new File([recordedVideoBlob], 'recorded_video.webm', { type: 'video/webm' });
                 const dataTransfer = new DataTransfer();
                 dataTransfer.items.add(file);
                 personalVideoInput.files = dataTransfer.files;
                 updatePersonalVideoInfo();
+                playRecordedVideoButton.classList.remove('d-none');
             };
 
             mediaRecorder.start();
@@ -60,10 +66,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
             mediaRecorder.stop();
             stream.getTracks().forEach(track => track.stop());
-            videoPreview.classList.add('d-none');
+            videoPreview.srcObject = null;
             recordVideoButton.classList.remove('d-none');
             stopRecordingButton.classList.add('d-none');
             recordedChunks = [];
+        }
+    }
+
+    function playRecordedVideo() {
+        if (recordedVideoBlob) {
+            const videoURL = URL.createObjectURL(recordedVideoBlob);
+            videoPreview.src = videoURL;
+            videoPreview.classList.remove('d-none');
+            videoPreview.play();
         }
     }
 
@@ -348,6 +363,9 @@ document.addEventListener('DOMContentLoaded', () => {
     async function checkServerHealth() {
         try {
             const response = await fetchWithRetry('/api/health');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             const data = await response.json();
             if (data.status === 'healthy') {
                 serverStatus.innerHTML = '';
