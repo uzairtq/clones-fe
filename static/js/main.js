@@ -126,10 +126,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     generateThumbnail(file)
                 ]);
 
-                if (isNaN(duration) || duration <= 0) {
-                    throw new Error('Invalid duration');
-                }
-
                 personalVideoInfo.innerHTML = `
                     <h5>Personal Video</h5>
                     <p>Filename: ${file.name}</p>
