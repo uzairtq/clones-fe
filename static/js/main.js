@@ -115,7 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function getUploadUrl(file) {
-        const response = await fetch('/get-upload-url', {
+        const response = await fetchWithTimeout('/get-upload-url', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -135,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function uploadFileToS3(file, uploadUrl) {
-        const response = await fetch(uploadUrl, {
+        const response = await fetchWithTimeout(uploadUrl, {
             method: 'PUT',
             body: file,
             headers: {
@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 formData.append('youtube_url', youtubeUrlInput.value);
 
                 // Process videos
-                const response = await fetch('/process_videos', {
+                const response = await fetchWithTimeout('/process_videos', {
                     method: 'POST',
                     body: formData
                 });
@@ -193,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (error) {
                 console.error('Error processing videos:', error);
-                showErrorMessage(`An error occurred: ${error.message}`);
+                showErrorMessage(`An error occurred: ${error.message}. Please check your internet connection and try again later.`);
             }
         });
     }
@@ -236,4 +236,46 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         gallerySection.appendChild(videoCard);
     }
+
+    async function fetchWithTimeout(url, options = {}) {
+        const timeout = 30000; // 30 seconds timeout
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeout);
+
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+
+        clearTimeout(id);
+        return response;
+    }
+
+    async function checkServerHealth() {
+        try {
+            const response = await fetchWithTimeout('/api/health');
+            if (!response.ok) {
+                throw new Error('Server is not responding');
+            }
+            const data = await response.json();
+            if (data.status !== 'healthy') {
+                throw new Error('Server is not healthy');
+            }
+            // If we reach here, the server is healthy
+            document.getElementById('server-status').innerHTML = '';
+        } catch (error) {
+            console.error('Server health check failed:', error);
+            document.getElementById('server-status').innerHTML = `
+                <div class="alert alert-warning mt-3" role="alert">
+                    Warning: The server may be experiencing issues. Some features might not work correctly.
+                </div>
+            `;
+        }
+    }
+
+    // Check server health every 30 seconds
+    setInterval(checkServerHealth, 30000);
+
+    // Initial health check
+    checkServerHealth();
 });
