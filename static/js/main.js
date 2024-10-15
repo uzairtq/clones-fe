@@ -120,35 +120,30 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Promise((resolve, reject) => {
             const video = document.createElement('video');
             video.preload = 'metadata';
-            console.log('Getting duration for:', file.name);
+            
+            const timeoutId = setTimeout(() => {
+                reject(new Error('Timeout: Unable to get video duration'));
+            }, 10000); // 10 seconds timeout
 
             video.onloadedmetadata = () => {
-                console.log('Metadata loaded. Duration:', video.duration);
-                if (isNaN(video.duration) || video.duration === Infinity) {
-                    console.log('Invalid duration, waiting for loadeddata event');
-                } else {
-                    URL.revokeObjectURL(video.src);
+                console.log('Video readyState:', video.readyState);
+                console.log('Video duration:', video.duration);
+                clearTimeout(timeoutId);
+                if (isFinite(video.duration)) {
                     resolve(video.duration);
-                }
-            };
-
-            video.addEventListener('loadeddata', () => {
-                console.log('Video data loaded. Duration:', video.duration);
-                if (isNaN(video.duration) || video.duration === Infinity) {
-                    console.error('Invalid duration after loadeddata');
+                } else {
                     reject(new Error('Invalid video duration'));
-                } else {
-                    URL.revokeObjectURL(video.src);
-                    resolve(video.duration);
                 }
-            });
+                URL.revokeObjectURL(video.src);
+            };
 
             video.onerror = (e) => {
-                console.error('Error getting video duration:', e);
+                clearTimeout(timeoutId);
+                reject(new Error(`Error loading video: ${e.target.error.message}`));
                 URL.revokeObjectURL(video.src);
-                reject(e);
             };
 
+            console.log('Getting duration for:', file.name);
             const url = URL.createObjectURL(file);
             console.log('Video URL created for duration:', url);
             video.src = url;
@@ -160,12 +155,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (file) {
             try {
                 console.log('Processing file:', file.name);
+                console.log('File type:', file.type);
+                console.log('File size:', file.size);
+
                 const [duration, thumbnailDataUrl] = await Promise.all([
                     getDuration(file),
                     generateThumbnail(file)
                 ]);
 
                 console.log('File processed successfully');
+                console.log('Duration:', duration);
                 personalVideoInfo.innerHTML = `
                     <h5>Personal Video</h5>
                     <p>Filename: ${file.name}</p>
