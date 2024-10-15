@@ -1,9 +1,7 @@
 import os
 import logging
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
-from flask_login import LoginManager, login_user, login_required, logout_user, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, Video, User
+from flask import Flask, render_template, request, jsonify
+from models import db, Video
 from utils.youtube_api import get_youtube_video_info
 from werkzeug.utils import secure_filename
 from uuid import uuid4
@@ -13,23 +11,16 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///videos.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.secret_key = os.environ.get("FLASK_SECRET_KEY") or "a secret key"
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 db.init_app(app)
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
 
 with app.app_context():
-    db.create_all()
+    db.drop_all()  # Drop all existing tables
+    db.create_all()  # Recreate all tables
 
 def get_dummy_presigned_url():
     return {
@@ -42,50 +33,7 @@ def get_dummy_presigned_url():
 def index():
     return render_template('index.html')
 
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        username = request.form.get('username')
-        email = request.form.get('email')
-        password = request.form.get('password')
-        
-        user = User.query.filter_by(username=username).first()
-        if user:
-            flash('Username already exists')
-            return redirect(url_for('register'))
-        
-        new_user = User(username=username, email=email, password=generate_password_hash(password))
-        db.session.add(new_user)
-        db.session.commit()
-        
-        flash('Registration successful. Please log in.')
-        return redirect(url_for('login'))
-    
-    return render_template('register.html')
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        user = User.query.filter_by(username=username).first()
-        if user and check_password_hash(user.password, password):
-            login_user(user)
-            return redirect(url_for('index'))
-        else:
-            flash('Invalid username or password')
-    
-    return render_template('login.html')
-
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    return redirect(url_for('index'))
-
 @app.route('/get-upload-url', methods=['POST'])
-@login_required
 def get_upload_url():
     file_name = request.json.get('fileName')
     file_type = request.json.get('fileType')
@@ -102,7 +50,6 @@ def get_upload_url():
     })
 
 @app.route('/process_videos', methods=['POST'])
-@login_required
 def process_videos():
     personal_video_s3_key = request.form.get('personal_video_s3_key')
     reference_video_s3_key = request.form.get('reference_video_s3_key')
@@ -131,8 +78,7 @@ def process_videos():
         personal_video_url=personal_video_url,
         reference_video_url=reference_video_url,
         reference_video_title=reference_video_title,
-        reference_video_thumbnail=reference_video_thumbnail,
-        user_id=current_user.id
+        reference_video_thumbnail=reference_video_thumbnail
     )
     db.session.add(new_video)
     db.session.commit()

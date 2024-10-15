@@ -14,74 +14,53 @@
 </head>
 <body class="bg-dark text-light">
     <div class="container py-4">
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
-            <div class="container-fluid">
-                <a class="navbar-brand" href="{{ url_for('index') }}">Video Fusion App</a>
-                <div class="navbar-nav ms-auto">
-                    {% if current_user.is_authenticated %}
-                        <span class="nav-item nav-link">Welcome, {{ current_user.username }}</span>
-                        <a class="nav-item nav-link" href="{{ url_for('logout') }}">Logout</a>
-                    {% else %}
-                        <a class="nav-item nav-link" href="{{ url_for('login') }}">Login</a>
-                        <a class="nav-item nav-link" href="{{ url_for('register') }}">Register</a>
-                    {% endif %}
-                </div>
-            </div>
-        </nav>
-
         <h1 class="display-4 mb-4 text-center">Video Fusion App</h1>
         
-        {% if current_user.is_authenticated %}
-            <div class="card bg-secondary mb-4">
-                <div class="card-body">
-                    <form id="video-form" enctype="multipart/form-data">
-                        <div class="mb-3">
-                            <label class="form-label" for="personal-video">Personal Video</label>
-                            <input class="form-control" id="personal-video" name="personal_video" type="file" accept="video/*">
-                            <div class="mt-2">
-                                <button type="button" class="btn btn-primary" id="record-video">Record Video</button>
-                                <button type="button" class="btn btn-danger d-none" id="stop-recording">Stop Recording</button>
-                            </div>
-                            <video id="video-preview" class="mt-2 d-none" autoplay muted></video>
+        <div class="card bg-secondary mb-4">
+            <div class="card-body">
+                <form id="video-form" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label" for="personal-video">Personal Video</label>
+                        <input class="form-control" id="personal-video" name="personal_video" type="file" accept="video/*">
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-primary" id="record-video">Record Video</button>
+                            <button type="button" class="btn btn-danger d-none" id="stop-recording">Stop Recording</button>
                         </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Reference Video</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="reference-video-type" id="youtube-option" value="youtube" checked>
-                                <label class="form-check-label" for="youtube-option">YouTube URL</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="reference-video-type" id="file-option" value="file">
-                                <label class="form-check-label" for="file-option">Upload Video File</label>
-                            </div>
-                            <input class="form-control mt-2" id="youtube-url" name="youtube_url" type="url" placeholder="https://www.youtube.com/watch?v=...">
-                            <input class="form-control mt-2 d-none" id="reference-video-file" name="reference_video" type="file" accept="video/*">
+                        <video id="video-preview" class="mt-2 d-none" autoplay muted></video>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Reference Video</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="reference-video-type" id="youtube-option" value="youtube" checked>
+                            <label class="form-check-label" for="youtube-option">YouTube URL</label>
                         </div>
-                        
-                        <div class="row mb-3">
-                            <div class="col-md-6" id="personal-video-info"></div>
-                            <div class="col-md-6" id="reference-video-info"></div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="reference-video-type" id="file-option" value="file">
+                            <label class="form-check-label" for="file-option">Upload Video File</label>
                         </div>
-                        
-                        <div class="text-center">
-                            <button type="submit" class="btn btn-success" id="fuse-button">Fuse 'em</button>
-                        </div>
-                    </form>
-                </div>
+                        <input class="form-control mt-2" id="youtube-url" name="youtube_url" type="url" placeholder="https://www.youtube.com/watch?v=...">
+                        <input class="form-control mt-2 d-none" id="reference-video-file" name="reference_video" type="file" accept="video/*">
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6" id="personal-video-info"></div>
+                        <div class="col-md-6" id="reference-video-info"></div>
+                    </div>
+                    
+                    <div class="text-center">
+                        <button type="submit" class="btn btn-success" id="fuse-button">Fuse 'em</button>
+                    </div>
+                </form>
             </div>
-            
-            <div id="result" class="mt-4 d-none">
-                <h2 class="h3 mb-3">Fused Video</h2>
-                <video id="fused-video" controls class="w-100">
-                    Your browser does not support the video tag.
-                </video>
-            </div>
-        {% else %}
-            <div class="alert alert-info text-center">
-                Please <a href="{{ url_for('login') }}">login</a> or <a href="{{ url_for('register') }}">register</a> to use the Video Fusion App.
-            </div>
-        {% endif %}
+        </div>
+        
+        <div id="result" class="mt-4 d-none">
+            <h2 class="h3 mb-3">Fused Video</h2>
+            <video id="fused-video" controls class="w-100">
+                Your browser does not support the video tag.
+            </video>
+        </div>
     </div>
     
     <script src="/static/js/main.js"></script>
