@@ -7,8 +7,7 @@ from utils.youtube_api import get_youtube_video_info
 import traceback
 import psutil
 import isodate
-from moviepy.editor import VideoFileClip
-from PIL import Image
+import base64
 import io
 
 app = Flask(__name__)
@@ -29,8 +28,8 @@ def initialize_s3_client():
             aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
             region_name='us-east-1'
         )
-    except NoCredentialsError:
-        logger.error("AWS credentials not found. Please check your environment variables.")
+    except Exception as e:
+        logger.error(f"Error initializing S3 client: {str(e)}")
         return None
 
 s3_client = initialize_s3_client()
@@ -52,36 +51,22 @@ def generate_presigned_url(file_name, file_type):
         return None
     return {'uploadUrl': response, 's3Key': s3_key}
 
-def generate_thumbnail(video_url):
+def upload_thumbnail_to_s3(thumbnail_data, video_key):
+    if not s3_client:
+        logger.error("S3 client is not initialized")
+        return None
+
     try:
-        # Download the video file
-        response = s3_client.get_object(Bucket=S3_BUCKET, Key=video_url.split(f"{S3_BUCKET}/")[1])
-        video_data = response['Body'].read()
+        # Remove the "data:image/jpeg;base64," prefix
+        thumbnail_data = thumbnail_data.split(',')[1]
+        thumbnail_bytes = base64.b64decode(thumbnail_data)
+        thumbnail_buffer = io.BytesIO(thumbnail_bytes)
 
-        # Use BytesIO instead of a temporary file
-        video_buffer = io.BytesIO(video_data)
-
-        # Generate thumbnail
-        with VideoFileClip(video_buffer.read()) as clip:
-            thumbnail_frame = clip.get_frame(1)  # Get frame at 1 second
-            thumbnail_image = Image.fromarray(thumbnail_frame)
-
-            # Resize thumbnail to a larger size
-            thumbnail_image.thumbnail((640, 480))
-
-            # Save thumbnail to bytes
-            thumbnail_bytes = io.BytesIO()
-            thumbnail_image.save(thumbnail_bytes, format='JPEG')
-            thumbnail_bytes.seek(0)
-
-        # Upload thumbnail to S3
-        thumbnail_key = f"thumbnails/{os.path.basename(video_url).split('.')[0]}.jpg"
-        s3_client.put_object(Bucket=S3_BUCKET, Key=thumbnail_key, Body=thumbnail_bytes, ContentType='image/jpeg')
-
+        thumbnail_key = f"thumbnails/{os.path.basename(video_key).split('.')[0]}.jpg"
+        s3_client.upload_fileobj(thumbnail_buffer, S3_BUCKET, thumbnail_key, ExtraArgs={'ContentType': 'image/jpeg'})
         return f"https://{S3_BUCKET}.s3.amazonaws.com/{thumbnail_key}"
     except Exception as e:
-        logger.error(f"Error generating thumbnail: {str(e)}")
-        logger.error(traceback.format_exc())
+        logger.error(f"Error uploading thumbnail to S3: {str(e)}")
         return None
 
 @app.route('/')
@@ -113,6 +98,7 @@ def process_videos():
         logger.debug("Received request to process videos")
         personal_video_s3_key = request.form.get('personal_video_s3_key')
         youtube_url = request.form.get('youtube_url')
+        personal_video_thumbnail = request.form.get('personal_video_thumbnail')
 
         logger.debug(f"Personal video S3 key: {personal_video_s3_key}")
         logger.debug(f"YouTube URL: {youtube_url}")
@@ -124,6 +110,10 @@ def process_videos():
         if not youtube_url:
             logger.error("YouTube URL is missing")
             return jsonify({'status': 'error', 'message': 'YouTube URL is required'}), 400
+
+        if not personal_video_thumbnail:
+            logger.error("Personal video thumbnail is missing")
+            return jsonify({'status': 'error', 'message': 'Personal video thumbnail is required'}), 400
 
         # Validate S3 key
         if not s3_client:
@@ -139,8 +129,11 @@ def process_videos():
         personal_video_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{personal_video_s3_key}"
         logger.debug(f"Personal video URL: {personal_video_url}")
 
-        # Generate thumbnail for personal video
-        personal_video_thumbnail = generate_thumbnail(personal_video_url)
+        # Upload thumbnail to S3
+        thumbnail_url = upload_thumbnail_to_s3(personal_video_thumbnail, personal_video_s3_key)
+        if not thumbnail_url:
+            logger.error("Failed to upload thumbnail to S3")
+            return jsonify({'status': 'error', 'message': 'Failed to upload thumbnail'}), 500
 
         # Process reference video (YouTube)
         youtube_info = get_youtube_video_info(youtube_url)
@@ -158,7 +151,7 @@ def process_videos():
             'status': 'success',
             'message': 'Video uploaded successfully.',
             'uploaded_video_url': uploaded_video_url,
-            'personal_video_thumbnail': personal_video_thumbnail,
+            'personal_video_thumbnail': thumbnail_url,
             'youtube_info': youtube_info
         })
 

@@ -74,19 +74,50 @@ document.addEventListener('DOMContentLoaded', () => {
         youtubeUrlInput.addEventListener('input', updateReferenceVideoInfo);
     }
 
+    async function generateThumbnail(file) {
+        return new Promise((resolve, reject) => {
+            const video = document.createElement('video');
+            video.preload = 'metadata';
+            video.onloadedmetadata = () => {
+                video.currentTime = 1; // Seek to 1 second
+            };
+            video.onseeked = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 320;
+                canvas.height = 180;
+                canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                const thumbnailDataUrl = canvas.toDataURL('image/jpeg');
+                resolve(thumbnailDataUrl);
+            };
+            video.onerror = reject;
+            video.src = URL.createObjectURL(file);
+        });
+    }
+
     function updatePersonalVideoInfo() {
         const file = personalVideoInput.files[0];
         if (file) {
             const videoElement = document.createElement('video');
             videoElement.preload = 'metadata';
-            videoElement.onloadedmetadata = () => {
+            videoElement.onloadedmetadata = async () => {
                 const duration = videoElement.duration;
-                personalVideoInfo.innerHTML = `
-                    <h5>Personal Video</h5>
-                    <p>Filename: ${file.name}</p>
-                    <p>Duration: ${formatDuration(duration)}</p>
-                    <img src="" alt="Personal Video Thumbnail" class="img-fluid mt-2 personal-thumbnail">
-                `;
+                try {
+                    const thumbnailDataUrl = await generateThumbnail(file);
+                    personalVideoInfo.innerHTML = `
+                        <h5>Personal Video</h5>
+                        <p>Filename: ${file.name}</p>
+                        <p>Duration: ${formatDuration(duration)}</p>
+                        <img src="${thumbnailDataUrl}" alt="Personal Video Thumbnail" class="img-fluid mt-2 personal-thumbnail">
+                    `;
+                } catch (error) {
+                    console.error('Error generating thumbnail:', error);
+                    personalVideoInfo.innerHTML = `
+                        <h5>Personal Video</h5>
+                        <p>Filename: ${file.name}</p>
+                        <p>Duration: ${formatDuration(duration)}</p>
+                        <p class="text-danger">Error generating thumbnail</p>
+                    `;
+                }
             };
             videoElement.src = URL.createObjectURL(file);
         } else {
@@ -193,10 +224,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error('YouTube URL is required');
                 }
 
+                const thumbnailDataUrl = await generateThumbnail(personalVideo);
+                
                 const personalVideoUploadData = await getUploadUrl(personalVideo);
                 console.log('Upload URL:', personalVideoUploadData.uploadUrl);
                 await uploadFileToS3(personalVideo, personalVideoUploadData.uploadUrl);
                 formData.append('personal_video_s3_key', personalVideoUploadData.s3Key);
+                formData.append('personal_video_thumbnail', thumbnailDataUrl);
 
                 formData.append('youtube_url', youtubeUrl);
 
@@ -212,16 +246,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     resultSection.classList.remove('d-none');
                     showSuccessMessage(data.message);
                     
-                    // Update personal video thumbnail
                     const personalThumbnail = document.querySelector('.personal-thumbnail');
-                    if (personalThumbnail && data.personal_video_thumbnail) {
-                        personalThumbnail.src = data.personal_video_thumbnail;
+                    if (personalThumbnail) {
+                        personalThumbnail.src = thumbnailDataUrl;
                         personalThumbnail.style.display = 'block';
                         personalThumbnail.style.maxWidth = '100%';
                         personalThumbnail.style.height = 'auto';
                     }
 
-                    // Update YouTube video info
                     if (data.youtube_info) {
                         referenceVideoInfo.innerHTML = `
                             <h5>YouTube Video</h5>
