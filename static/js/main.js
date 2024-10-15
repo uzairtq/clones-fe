@@ -8,8 +8,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const personalVideoInfo = document.getElementById('personal-video-info');
     const referenceVideoInfo = document.getElementById('reference-video-info');
     const resultSection = document.getElementById('result');
-    const fusedVideo = document.getElementById('fused-video');
-    const simulationMessage = document.getElementById('simulation-message');
+    const uploadedVideo = document.getElementById('uploaded-video');
+    const uploadMessage = document.getElementById('upload-message');
     const serverStatus = document.getElementById('server-status');
 
     let mediaRecorder;
@@ -190,14 +190,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await response.json();
 
                 if (data.status === 'success') {
-                    fusedVideo.src = data.fused_video_url;
+                    uploadedVideo.src = data.uploaded_video_url;
                     resultSection.classList.remove('d-none');
                     showSuccessMessage(data.message);
                 } else {
-                    showErrorMessage(`Error processing videos: ${data.message}`);
+                    showErrorMessage(`Error uploading video: ${data.message}`);
                 }
             } catch (error) {
-                console.error('Error processing videos:', error);
+                console.error('Error uploading video:', error);
                 showErrorMessage(`An error occurred: ${error.message}. Please try again later or contact support if the problem persists.`);
             }
         });
@@ -210,21 +210,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showErrorMessage(message) {
-        simulationMessage.innerHTML = `
+        uploadMessage.innerHTML = `
             <div class="alert alert-danger mt-3" role="alert">
                 ${message}
             </div>
         `;
-        simulationMessage.classList.remove('d-none');
+        uploadMessage.classList.remove('d-none');
     }
 
     function showSuccessMessage(message) {
-        simulationMessage.innerHTML = `
+        uploadMessage.innerHTML = `
             <div class="alert alert-success mt-3" role="alert">
                 ${message}
             </div>
         `;
-        simulationMessage.classList.remove('d-none');
+        uploadMessage.classList.remove('d-none');
     }
 
     async function fetchWithTimeout(url, options = {}) {

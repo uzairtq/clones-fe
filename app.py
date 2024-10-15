@@ -3,20 +3,15 @@ import logging
 import traceback
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify
 from utils.youtube_api import get_youtube_video_info
 from werkzeug.utils import secure_filename
 from uuid import uuid4
 from urllib.parse import urlparse
 import psutil
-from models import db, Video, FusedVideo
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///videofusion.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
-
-db.init_app(app)
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -61,11 +56,6 @@ def generate_presigned_url(file_name, file_type):
 @app.route('/')
 def index():
     return render_template('index.html')
-
-@app.route('/gallery')
-def gallery():
-    fused_videos = FusedVideo.query.order_by(FusedVideo.created_at.desc()).all()
-    return render_template('gallery.html', fused_videos=fused_videos)
 
 @app.route('/get-upload-url', methods=['POST'])
 def get_upload_url():
@@ -126,24 +116,14 @@ def process_videos():
 
         logger.debug(f"YouTube video info: {youtube_info}")
 
-        # TODO: Implement actual video fusion logic
-        # For now, we'll just return the personal video URL as the fused video
-        fused_video_url = personal_video_url
-
-        # Store fused video information in the database
-        new_fused_video = FusedVideo(
-            personal_video_url=personal_video_url,
-            reference_video_url=youtube_url,
-            fused_video_url=fused_video_url
-        )
-        db.session.add(new_fused_video)
-        db.session.commit()
+        # For now, we'll just return the personal video URL
+        uploaded_video_url = personal_video_url
 
         logger.debug("Video processing completed successfully")
         return jsonify({
             'status': 'success',
-            'message': 'Video processing completed successfully.',
-            'fused_video_url': fused_video_url
+            'message': 'Video uploaded successfully.',
+            'uploaded_video_url': uploaded_video_url
         })
 
     except Exception as e:
@@ -186,6 +166,4 @@ def health_check():
     return jsonify(health_status), 200 if health_status['status'] == 'healthy' else 500
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(host='0.0.0.0', port=5000)
