@@ -24,9 +24,9 @@ with app.app_context():
 
 def get_dummy_presigned_url():
     return {
-        "filename": "ad_v02.mp4",
-        "s3Key": "user-uploads/ad_v02-50c8000e-eb01-4f09-9810-53ff94959c89.mp4",
-        "uploadUrl": "https://clones-main.s3-accelerate.amazonaws.com/studio/670e67896360db8d4102b742/user-uploads/ad_v02-50c8000e-eb01-4f09-9810-53ff94959c89.mp4?AWSAccessKeyId=AKIAQE43KLS4A2UB4LIT&Signature=vUKEx6YilRNopt%2FqnJFtyltdSxE%3D&content-type=video%2Fmp4&Expires=1729001167"
+        'filename': 'simulated_upload.mp4',
+        's3Key': 'user-uploads/simulated_upload-12345678-abcd-efgh-ijkl-987654321012.mp4',
+        'uploadUrl': 'https://example-bucket.s3.amazonaws.com/user-uploads/simulated_upload-12345678-abcd-efgh-ijkl-987654321012.mp4?AWSAccessKeyId=AKIAIOSFODNN7EXAMPLE&Signature=wJalrXUtnFEMI%2FK7MDENG%2FbPxRfiCYEXAMPLEKEY&Expires=2024-10-16T00:00:00Z'
     }
 
 @app.route('/')
@@ -84,7 +84,7 @@ def process_videos():
 
     return jsonify({
         'status': 'success',
-        'message': 'Video processing simulated successfully',
+        'message': 'Video processing simulated successfully. Note: This is a simulated process, and no actual S3 upload has occurred.',
         'fused_video_url': fused_video_url
     })
 

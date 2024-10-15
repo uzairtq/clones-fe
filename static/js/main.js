@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const referenceVideoInfo = document.getElementById('reference-video-info');
     const resultSection = document.getElementById('result');
     const fusedVideo = document.getElementById('fused-video');
+    const simulationMessage = document.getElementById('simulation-message');
 
     let mediaRecorder;
     let recordedChunks = [];
@@ -166,7 +167,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.status === 'success') {
                     fusedVideo.src = data.fused_video_url;
                     resultSection.classList.remove('d-none');
-                    alert(data.message); // Display the simulated upload message
+                    simulationMessage.innerHTML = `
+                        <div class="alert alert-info mt-3" role="alert">
+                            ${data.message}
+                        </div>
+                    `;
+                    simulationMessage.classList.remove('d-none');
                 } else {
                     alert('Error processing videos: ' + data.message);
                 }
