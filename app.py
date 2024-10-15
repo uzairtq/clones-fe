@@ -4,21 +4,21 @@ import traceback
 import boto3
 from botocore.exceptions import ClientError
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
-from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Video
 from utils.youtube_api import get_youtube_video_info
 from werkzeug.utils import secure_filename
 from uuid import uuid4
 from urllib.parse import urlparse
+import re
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///videos.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['SECRET_KEY'] = os.urandom(24)  # Add a secret key for session management
+app.config['SECRET_KEY'] = os.urandom(24)
 
-# Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
@@ -31,9 +31,8 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 with app.app_context():
-    db.create_all()  # Create all tables
+    db.create_all()
 
-# S3 client configuration
 s3_client = boto3.client(
     's3',
     aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
@@ -59,12 +58,32 @@ def generate_presigned_url(file_name, file_type):
 def index():
     return render_template('index.html')
 
+def is_password_strong(password):
+    if len(password) < 8:
+        return False
+    if not re.search(r'[A-Z]', password):
+        return False
+    if not re.search(r'[a-z]', password):
+        return False
+    if not re.search(r'\d', password):
+        return False
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        return False
+    return True
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
     if request.method == 'POST':
         username = request.form.get('username')
         email = request.form.get('email')
         password = request.form.get('password')
+        
+        if not is_password_strong(password):
+            flash('Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character.')
+            return redirect(url_for('register'))
         
         user = User.query.filter_by(username=username).first()
         if user:
@@ -83,6 +102,9 @@ def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
@@ -90,6 +112,7 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password):
             login_user(user)
+            flash('Logged in successfully')
             return redirect(url_for('dashboard'))
         else:
             flash('Invalid username or password')
@@ -100,6 +123,7 @@ def login():
 @login_required
 def logout():
     logout_user()
+    flash('Logged out successfully')
     return redirect(url_for('index'))
 
 @app.route('/dashboard')
@@ -107,6 +131,35 @@ def logout():
 def dashboard():
     user_videos = Video.query.filter_by(user_id=current_user.id).all()
     return render_template('dashboard.html', videos=user_videos)
+
+@app.route('/profile')
+@login_required
+def profile():
+    return render_template('profile.html')
+
+@app.route('/change_password', methods=['POST'])
+@login_required
+def change_password():
+    current_password = request.form.get('current_password')
+    new_password = request.form.get('new_password')
+    confirm_password = request.form.get('confirm_password')
+    
+    if not current_user.check_password(current_password):
+        flash('Current password is incorrect')
+        return redirect(url_for('profile'))
+    
+    if new_password != confirm_password:
+        flash('New passwords do not match')
+        return redirect(url_for('profile'))
+    
+    if not is_password_strong(new_password):
+        flash('New password must be at least 8 characters long and contain uppercase, lowercase, number, and special character.')
+        return redirect(url_for('profile'))
+    
+    current_user.set_password(new_password)
+    db.session.commit()
+    flash('Password changed successfully')
+    return redirect(url_for('profile'))
 
 @app.route('/get-upload-url', methods=['POST'])
 @login_required
@@ -146,6 +199,13 @@ def process_videos():
         if not youtube_url:
             logger.error("YouTube URL is missing")
             return jsonify({'status': 'error', 'message': 'YouTube URL is required'}), 400
+
+        # Validate S3 key
+        try:
+            s3_client.head_object(Bucket=S3_BUCKET, Key=personal_video_s3_key)
+        except ClientError as e:
+            logger.error(f"Error validating S3 object: {str(e)}")
+            return jsonify({'status': 'error', 'message': 'Invalid or inaccessible personal video'}), 400
 
         personal_video_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{personal_video_s3_key}"
         logger.debug(f"Personal video URL: {personal_video_url}")
