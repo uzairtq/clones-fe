@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const fusedVideo = document.getElementById('fused-video');
     const simulationMessage = document.getElementById('simulation-message');
     const gallerySection = document.querySelector('.gallery-section .row');
+    const serverStatus = document.getElementById('server-status');
 
     let mediaRecorder;
     let recordedChunks = [];
@@ -95,8 +96,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateReferenceVideoInfo() {
         const youtubeUrl = youtubeUrlInput.value;
         if (youtubeUrl) {
-            // In a real application, you would make an API call to get video information
-            // For this example, we'll use mock data
             const mockData = {
                 title: 'Sample YouTube Video',
                 thumbnail: 'https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg',
@@ -114,37 +113,55 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function getUploadUrl(file) {
-        const response = await fetchWithTimeout('/get-upload-url', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                fileName: file.name,
-                fileType: file.type,
-            }),
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(`Failed to get upload URL: ${errorData.message}`);
+    async function fetchWithRetry(url, options = {}, retries = 3, backoff = 300) {
+        try {
+            const response = await fetchWithTimeout(url, options);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response;
+        } catch (error) {
+            if (retries > 0) {
+                await new Promise(resolve => setTimeout(resolve, backoff));
+                return fetchWithRetry(url, options, retries - 1, backoff * 2);
+            } else {
+                throw error;
+            }
         }
+    }
 
-        return response.json();
+    async function getUploadUrl(file) {
+        try {
+            const response = await fetchWithRetry('/get-upload-url', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    fileName: file.name,
+                    fileType: file.type,
+                }),
+            });
+            return response.json();
+        } catch (error) {
+            throw new Error(`Failed to get upload URL: ${error.message}. Please check your internet connection and try again.`);
+        }
     }
 
     async function uploadFileToS3(file, uploadUrl) {
-        const response = await fetchWithTimeout(uploadUrl, {
-            method: 'PUT',
-            body: file,
-            headers: {
-                'Content-Type': file.type,
-            },
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to upload file to S3: ${response.statusText}`);
+        try {
+            const response = await fetchWithRetry(uploadUrl, {
+                method: 'PUT',
+                body: file,
+                headers: {
+                    'Content-Type': file.type,
+                },
+            });
+            if (!response.ok) {
+                throw new Error(`Failed to upload file to S3: ${response.statusText}`);
+            }
+        } catch (error) {
+            throw new Error(`Error uploading file: ${error.message}. Please try again or contact support if the problem persists.`);
         }
     }
 
@@ -154,7 +171,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData();
 
             try {
-                // Upload personal video
                 const personalVideo = personalVideoInput.files[0];
                 if (!personalVideo) {
                     throw new Error('Personal video is required');
@@ -164,24 +180,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 await uploadFileToS3(personalVideo, personalVideoUploadData.uploadUrl);
                 formData.append('personal_video_s3_key', personalVideoUploadData.s3Key);
 
-                // Add YouTube URL
                 formData.append('youtube_url', youtubeUrlInput.value);
 
-                // Process videos
-                const response = await fetchWithTimeout('/process_videos', {
+                const response = await fetchWithRetry('/process_videos', {
                     method: 'POST',
                     body: formData
                 });
 
-                let data;
-                try {
-                    data = await response.json();
-                } catch (parseError) {
-                    console.error('Error parsing JSON response:', parseError);
-                    const responseText = await response.text();
-                    console.error('Raw response:', responseText);
-                    throw new Error('Invalid response from server. Please try again later.');
-                }
+                const data = await response.json();
 
                 if (data.status === 'success') {
                     fusedVideo.src = data.fused_video_url;
@@ -193,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (error) {
                 console.error('Error processing videos:', error);
-                showErrorMessage(`An error occurred: ${error.message}. Please check your internet connection and try again later.`);
+                showErrorMessage(`An error occurred: ${error.message}. Please try again later or contact support if the problem persists.`);
             }
         });
     }
@@ -238,44 +244,61 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchWithTimeout(url, options = {}) {
-        const timeout = 30000; // 30 seconds timeout
+        const timeout = 30000;
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), timeout);
 
-        const response = await fetch(url, {
-            ...options,
-            signal: controller.signal
-        });
-
-        clearTimeout(id);
-        return response;
-    }
-
-    async function checkServerHealth() {
         try {
-            const response = await fetchWithTimeout('/api/health');
-            if (!response.ok) {
-                throw new Error('Server is not responding');
-            }
-            const data = await response.json();
-            if (data.status !== 'healthy') {
-                throw new Error('Server is not healthy');
-            }
-            // If we reach here, the server is healthy
-            document.getElementById('server-status').innerHTML = '';
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal
+            });
+            clearTimeout(id);
+            return response;
         } catch (error) {
-            console.error('Server health check failed:', error);
-            document.getElementById('server-status').innerHTML = `
-                <div class="alert alert-warning mt-3" role="alert">
-                    Warning: The server may be experiencing issues. Some features might not work correctly.
-                </div>
-            `;
+            clearTimeout(id);
+            throw error;
         }
     }
 
-    // Check server health every 30 seconds
-    setInterval(checkServerHealth, 30000);
+    let healthCheckInterval = 30000;
+    const maxHealthCheckInterval = 300000;
 
-    // Initial health check
+    async function checkServerHealth() {
+        try {
+            const response = await fetchWithRetry('/api/health');
+            const data = await response.json();
+            if (data.status === 'healthy') {
+                serverStatus.innerHTML = '';
+                healthCheckInterval = 30000;
+            } else {
+                throw new Error(JSON.stringify(data));
+            }
+        } catch (error) {
+            console.error('Server health check failed:', error);
+            let errorMessage = 'The server may be experiencing issues. Some features might not work correctly.';
+            
+            try {
+                const errorData = JSON.parse(error.message);
+                if (errorData.s3_status === 'ERROR') {
+                    errorMessage += ' There seems to be a problem with the storage service.';
+                }
+                if (errorData.cpu_usage > 90 || errorData.memory_usage > 90) {
+                    errorMessage += ' The server is under high load.';
+                }
+            } catch (e) {
+            }
+
+            serverStatus.innerHTML = `
+                <div class="alert alert-warning mt-3" role="alert">
+                    Warning: ${errorMessage} We're working on resolving this. Please try again later.
+                </div>
+            `;
+            healthCheckInterval = Math.min(healthCheckInterval * 2, maxHealthCheckInterval);
+        } finally {
+            setTimeout(checkServerHealth, healthCheckInterval);
+        }
+    }
+
     checkServerHealth();
 });

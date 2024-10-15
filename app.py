@@ -2,12 +2,13 @@ import os
 import logging
 import traceback
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoCredentialsError
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from utils.youtube_api import get_youtube_video_info
 from werkzeug.utils import secure_filename
 from uuid import uuid4
 from urllib.parse import urlparse
+import psutil
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -15,17 +16,30 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-s3_client = boto3.client(
-    's3',
-    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY')
-)
+# Initialize S3 client with error handling
+try:
+    s3_client = boto3.client(
+        's3',
+        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY')
+    )
+except NoCredentialsError:
+    logger.error("AWS credentials not found. Please check your environment variables.")
+    s3_client = None
+except Exception as e:
+    logger.error(f"Error initializing S3 client: {str(e)}")
+    s3_client = None
+
 S3_BUCKET = os.environ.get('S3_BUCKET')
 
 # In-memory storage for fused videos (replace with a database in a production environment)
 fused_videos = []
 
 def generate_presigned_url(file_name, file_type):
+    if not s3_client:
+        logger.error("S3 client is not initialized. Cannot generate presigned URL.")
+        return None
+
     s3_key = f"user-uploads/{file_name}-{uuid4()}"
     try:
         response = s3_client.generate_presigned_url('put_object',
@@ -81,6 +95,10 @@ def process_videos():
             return jsonify({'status': 'error', 'message': 'YouTube URL is required'}), 400
 
         # Validate S3 key
+        if not s3_client:
+            logger.error("S3 client is not initialized. Cannot validate S3 object.")
+            return jsonify({'status': 'error', 'message': 'S3 connection error. Please try again later.'}), 500
+
         try:
             s3_client.head_object(Bucket=S3_BUCKET, Key=personal_video_s3_key)
         except ClientError as e:
@@ -124,11 +142,34 @@ def process_videos():
     except Exception as e:
         logger.error(f"Error processing videos: {str(e)}")
         logger.error(traceback.format_exc())
-        return jsonify({'status': 'error', 'message': f'An error occurred: {str(e)}'}), 500
+        return jsonify({'status': 'error', 'message': f'An error occurred: {str(e)}. Please try again later.'}), 500
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    return jsonify({'status': 'healthy'}), 200
+    health_status = {
+        'status': 'healthy',
+        's3_status': 'ERROR',
+        'cpu_usage': psutil.cpu_percent(),
+        'memory_usage': psutil.virtual_memory().percent,
+        'disk_usage': psutil.disk_usage('/').percent
+    }
+
+    # Check S3 connection
+    if not s3_client:
+        logger.error("S3 client is not initialized.")
+        health_status['s3_status'] = 'ERROR'
+        health_status['status'] = 'unhealthy'
+    else:
+        try:
+            s3_client.list_buckets()
+            health_status['s3_status'] = 'OK'
+        except Exception as e:
+            logger.error(f"S3 health check failed: {str(e)}")
+            health_status['s3_status'] = 'ERROR'
+            health_status['status'] = 'unhealthy'
+
+    logger.info(f"Health check: {health_status}")
+    return jsonify(health_status), 200 if health_status['status'] == 'healthy' else 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
