@@ -2,7 +2,7 @@ import os
 import logging
 import requests
 import json
-from app import app, get_dummy_presigned_url
+from app import app, generate_presigned_url
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -39,16 +39,17 @@ def test_s3_upload():
             s3_key = data['s3Key']
             logger.info(f"Received upload URL and S3 key: {s3_key}")
 
-            # Simulate file upload using the dummy presigned URL
+            # Simulate file upload using the presigned URL
             logger.info(f"Simulating file upload to: {upload_url}")
 
-            # Verify the dummy data
-            dummy_data = get_dummy_presigned_url()
-            assert data['filename'] == dummy_data['filename'], "Filename mismatch"
-            assert data['s3Key'] == dummy_data['s3Key'], "S3 key mismatch"
-            assert data['uploadUrl'] == dummy_data['uploadUrl'], "Upload URL mismatch"
+            with open(test_file, 'rb') as f:
+                files = {'file': (test_file, f)}
+                upload_response = requests.put(upload_url, data=files['file'])
 
-            logger.info("Dummy presigned URL data verified successfully")
+            if upload_response.status_code == 200:
+                logger.info("File uploaded successfully")
+            else:
+                logger.error(f"Failed to upload file. Status code: {upload_response.status_code}")
 
     except Exception as e:
         logger.error(f"Error during S3 upload test: {str(e)}")

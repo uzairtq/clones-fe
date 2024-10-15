@@ -25,28 +25,30 @@
                             <a class="nav-link" href="{{ url_for('index') }}">New Fusion</a>
                         </li>
                     </ul>
-                    <ul class="navbar-nav">
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
-                        </li>
-                    </ul>
                 </div>
             </div>
         </nav>
 
         <div class="card bg-secondary mb-4">
             <div class="card-body">
-                <h2 class="card-title">Your Fused Videos</h2>
+                <h2 class="card-title">Fused Videos</h2>
                 <div class="row" id="video-list">
-                    <!-- Video list will be populated here -->
+                    {% for video in videos %}
+                    <div class="col-md-4 mb-3">
+                        <div class="card">
+                            <img src="{{ video.reference_video_thumbnail }}" class="card-img-top" alt="Video thumbnail">
+                            <div class="card-body">
+                                <h5 class="card-title">{{ video.reference_video_title }}</h5>
+                                <a href="{{ video.personal_video_url }}" class="btn btn-primary" target="_blank">View Fused Video</a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // We'll add JavaScript to fetch and display the user's videos later
-    </script>
 </body>
 </html>
