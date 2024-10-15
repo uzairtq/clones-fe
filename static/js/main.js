@@ -270,6 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     errorMessage += ' The server is under high load.';
                 }
             } catch (e) {
+                // If parsing fails, we'll use the default error message
             }
 
             serverStatus.innerHTML = `
