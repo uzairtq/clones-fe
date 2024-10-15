@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function startRecording() {
+        recordVideoButton.textContent = 'Record Video';
         try {
             stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             videoPreview.srcObject = stream;
@@ -70,6 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
             videoPreview.srcObject = null;
             videoPreview.classList.add('d-none');
             recordVideoButton.classList.remove('d-none');
+            recordVideoButton.textContent = 'Re-record Video';
             stopRecordingButton.classList.add('d-none');
             recordedChunks = [];
         }
