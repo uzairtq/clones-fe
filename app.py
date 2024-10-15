@@ -132,7 +132,7 @@ def process_videos():
         logger.error(traceback.format_exc())
         return jsonify({'status': 'error', 'message': f'An error occurred: {str(e)}. Please try again later.'}), 500
 
-@app.route('/get_youtube_info', methods=['GET'])
+@app.route('/get_youtube_info')
 def get_youtube_info():
     youtube_url = request.args.get('url')
     if not youtube_url:
@@ -141,11 +141,6 @@ def get_youtube_info():
     video_info = get_youtube_video_info(youtube_url)
     if not video_info:
         return jsonify({'error': 'Invalid YouTube URL or unable to fetch video information'}), 400
-
-    # Convert duration to a more user-friendly format
-    duration = isodate.parse_duration(video_info['duration'])
-    minutes, seconds = divmod(duration.total_seconds(), 60)
-    video_info['duration'] = f"{int(minutes)}:{int(seconds):02d}"
 
     return jsonify(video_info)
 

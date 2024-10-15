@@ -1,6 +1,7 @@
 import os
 from urllib.parse import urlparse, parse_qs
 import googleapiclient.discovery
+import isodate
 
 def extract_video_id(url):
     parsed_url = urlparse(url)
@@ -34,12 +35,15 @@ def get_youtube_video_info(url):
 
         video_info = response["items"][0]
         title = video_info["snippet"]["title"]
-        duration = video_info["contentDetails"]["duration"]
+        duration_iso = video_info["contentDetails"]["duration"]
+        duration = isodate.parse_duration(duration_iso)
+        minutes, seconds = divmod(duration.total_seconds(), 60)
+        formatted_duration = f"{int(minutes)}:{int(seconds):02d}"
         thumbnail = video_info["snippet"]["thumbnails"]["default"]["url"]
 
         return {
             'title': title,
-            'duration': duration,
+            'duration': formatted_duration,
             'thumbnail': thumbnail
         }
     except Exception as e:
