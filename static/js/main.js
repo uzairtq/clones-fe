@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const fusedVideo = document.getElementById('fused-video');
     const simulationMessage = document.getElementById('simulation-message');
     const serverStatus = document.getElementById('server-status');
-    const gallerySection = document.getElementById('gallery-section');
 
     let mediaRecorder;
     let recordedChunks = [];
@@ -194,7 +193,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     fusedVideo.src = data.fused_video_url;
                     resultSection.classList.remove('d-none');
                     showSuccessMessage(data.message);
-                    updateGallery(data.fused_video);
                 } else {
                     showErrorMessage(`Error processing videos: ${data.message}`);
                 }
@@ -227,21 +225,6 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
         simulationMessage.classList.remove('d-none');
-    }
-
-    function updateGallery(fusedVideo) {
-        const videoCard = document.createElement('div');
-        videoCard.className = 'col-md-4 mb-4';
-        videoCard.innerHTML = `
-            <div class="card">
-                <img src="${fusedVideo.youtube_thumbnail}" class="card-img-top" alt="${fusedVideo.youtube_title}">
-                <div class="card-body">
-                    <h5 class="card-title">${fusedVideo.youtube_title}</h5>
-                    <a href="${fusedVideo.fused_video_url}" class="btn btn-primary" target="_blank">Watch Fused Video</a>
-                </div>
-            </div>
-        `;
-        gallerySection.appendChild(videoCard);
     }
 
     async function fetchWithTimeout(url, options = {}) {
