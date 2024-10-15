@@ -1,7 +1,11 @@
 import os
+import logging
 from urllib.parse import urlparse, parse_qs
 import googleapiclient.discovery
 import isodate
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 def extract_video_id(url):
     parsed_url = urlparse(url)
@@ -19,6 +23,7 @@ def extract_video_id(url):
 def get_youtube_video_info(url):
     video_id = extract_video_id(url)
     if not video_id:
+        logger.error(f"Invalid YouTube URL: {url}")
         return None
 
     youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=os.environ.get("YOUTUBE_API_KEY"))
@@ -31,15 +36,27 @@ def get_youtube_video_info(url):
         response = request.execute()
 
         if not response["items"]:
+            logger.error(f"No video found for ID: {video_id}")
             return None
 
         video_info = response["items"][0]
         title = video_info["snippet"]["title"]
         duration_iso = video_info["contentDetails"]["duration"]
-        duration = isodate.parse_duration(duration_iso)
-        total_seconds = duration.total_seconds()
-        minutes, seconds = divmod(total_seconds, 60)
-        formatted_duration = f'{int(minutes)}:{int(seconds):02d}'
+        
+        logger.debug(f"Duration ISO: {duration_iso}")
+        
+        try:
+            duration = isodate.parse_duration(duration_iso)
+            total_seconds = duration.total_seconds()
+            logger.debug(f"Total seconds: {total_seconds}")
+            
+            minutes, seconds = divmod(int(total_seconds), 60)
+            formatted_duration = f'{minutes}:{seconds:02d}'
+            logger.debug(f"Formatted duration: {formatted_duration}")
+        except Exception as duration_error:
+            logger.error(f"Error parsing duration: {str(duration_error)}")
+            formatted_duration = "00:00"  # Default duration if parsing fails
+        
         thumbnail = video_info["snippet"]["thumbnails"]["default"]["url"]
 
         return {
@@ -48,5 +65,5 @@ def get_youtube_video_info(url):
             'thumbnail': thumbnail
         }
     except Exception as e:
-        print(f"Error fetching YouTube video info: {str(e)}")
+        logger.error(f"Error fetching YouTube video info: {str(e)}")
         return None
