@@ -133,8 +133,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function uploadFileToS3(file, uploadUrl) {
-        // Note: This is a simulated upload process and not an actual S3 upload
-        console.log('Simulating file upload to:', uploadUrl);
+        const response = await fetch(uploadUrl, {
+            method: 'PUT',
+            body: file,
+            headers: {
+                'Content-Type': file.type,
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to upload file to S3');
+        }
     }
 
     if (videoForm) {

@@ -1,7 +1,11 @@
 import os
 import logging
-from flask import Flask, render_template, request, jsonify
-from models import db, Video
+import boto3
+from botocore.exceptions import ClientError
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
+from models import db, User, Video
 from utils.youtube_api import get_youtube_video_info
 from werkzeug.utils import secure_filename
 from uuid import uuid4
@@ -11,29 +15,99 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///videos.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['SECRET_KEY'] = os.urandom(24)  # Add a secret key for session management
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 db.init_app(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 with app.app_context():
-    db.drop_all()  # Drop all existing tables
-    db.create_all()  # Recreate all tables
+    db.create_all()  # Create all tables
 
-def get_dummy_presigned_url():
-    return {
-        'filename': 'simulated_upload.mp4',
-        's3Key': 'user-uploads/simulated_upload-12345678-abcd-efgh-ijkl-987654321012.mp4',
-        'uploadUrl': 'https://example-bucket.s3.amazonaws.com/user-uploads/simulated_upload-12345678-abcd-efgh-ijkl-987654321012.mp4?AWSAccessKeyId=AKIAIOSFODNN7EXAMPLE&Signature=wJalrXUtnFEMI%2FK7MDENG%2FbPxRfiCYEXAMPLEKEY&Expires=2024-10-16T00:00:00Z'
-    }
+# S3 client configuration
+s3_client = boto3.client(
+    's3',
+    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY')
+)
+S3_BUCKET = os.environ.get('S3_BUCKET')
+
+def generate_presigned_url(file_name, file_type):
+    s3_key = f"user-uploads/{file_name}-{uuid4()}"
+    try:
+        response = s3_client.generate_presigned_url('put_object',
+                                                    Params={'Bucket': S3_BUCKET,
+                                                            'Key': s3_key,
+                                                            'ContentType': file_type},
+                                                    ExpiresIn=3600)
+    except ClientError as e:
+        logging.error(e)
+        return None
+    return {'uploadUrl': response, 's3Key': s3_key}
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(username=username).first()
+        if user:
+            flash('Username already exists')
+            return redirect(url_for('register'))
+        
+        new_user = User(username=username, email=email)
+        new_user.set_password(password)
+        db.session.add(new_user)
+        db.session.commit()
+        
+        flash('Registered successfully')
+        return redirect(url_for('login'))
+    
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(username=username).first()
+        if user and user.check_password(password):
+            login_user(user)
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid username or password')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    user_videos = Video.query.filter_by(user_id=current_user.id).all()
+    return render_template('dashboard.html', videos=user_videos)
+
 @app.route('/get-upload-url', methods=['POST'])
+@login_required
 def get_upload_url():
     file_name = request.json.get('fileName')
     file_type = request.json.get('fileType')
@@ -41,17 +115,20 @@ def get_upload_url():
     if not file_name or not file_type:
         return jsonify({'status': 'error', 'message': 'File name and type are required'}), 400
 
-    dummy_data = get_dummy_presigned_url()
+    presigned_data = generate_presigned_url(file_name, file_type)
+    if not presigned_data:
+        return jsonify({'status': 'error', 'message': 'Failed to generate upload URL'}), 500
+
     return jsonify({
         'status': 'success',
-        'filename': dummy_data['filename'],
-        's3Key': dummy_data['s3Key'],
-        'uploadUrl': dummy_data['uploadUrl']
+        'filename': file_name,
+        's3Key': presigned_data['s3Key'],
+        'uploadUrl': presigned_data['uploadUrl']
     })
 
 @app.route('/process_videos', methods=['POST'])
+@login_required
 def process_videos():
-    # Note: This is a simulated upload process and not an actual S3 upload
     personal_video_s3_key = request.form.get('personal_video_s3_key')
     youtube_url = request.form.get('youtube_url')
 
@@ -61,7 +138,7 @@ def process_videos():
     if not youtube_url:
         return jsonify({'status': 'error', 'message': 'YouTube URL is required'}), 400
 
-    personal_video_url = f"https://example.com/{personal_video_s3_key}"
+    personal_video_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{personal_video_s3_key}"
 
     # Process reference video (YouTube)
     youtube_info = get_youtube_video_info(youtube_url)
@@ -73,7 +150,8 @@ def process_videos():
         personal_video_url=personal_video_url,
         reference_video_url=youtube_url,
         reference_video_title=youtube_info['title'],
-        reference_video_thumbnail=youtube_info['thumbnail']
+        reference_video_thumbnail=youtube_info['thumbnail'],
+        user_id=current_user.id
     )
     db.session.add(new_video)
     db.session.commit()
@@ -84,7 +162,7 @@ def process_videos():
 
     return jsonify({
         'status': 'success',
-        'message': 'Video processing simulated successfully. Note: This is a simulated process, and no actual S3 upload has occurred.',
+        'message': 'Video processing completed successfully.',
         'fused_video_url': fused_video_url
     })
 
