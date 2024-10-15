@@ -17,8 +17,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let recordedChunks = [];
     let stream;
 
-    recordVideoButton.addEventListener('click', startRecording);
-    stopRecordingButton.addEventListener('click', stopRecording);
+    if (recordVideoButton) {
+        recordVideoButton.addEventListener('click', startRecording);
+    }
+    if (stopRecordingButton) {
+        stopRecordingButton.addEventListener('click', stopRecording);
+    }
 
     async function startRecording() {
         try {
@@ -63,12 +67,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    personalVideoInput.addEventListener('change', updatePersonalVideoInfo);
-    youtubeUrlInput.addEventListener('input', updateReferenceVideoInfo);
-    referenceVideoFileInput.addEventListener('change', updateReferenceVideoInfo);
-
-    youtubeOption.addEventListener('change', toggleReferenceVideoInputs);
-    fileOption.addEventListener('change', toggleReferenceVideoInputs);
+    if (personalVideoInput) {
+        personalVideoInput.addEventListener('change', updatePersonalVideoInfo);
+    }
+    if (youtubeUrlInput) {
+        youtubeUrlInput.addEventListener('input', updateReferenceVideoInfo);
+    }
+    if (referenceVideoFileInput) {
+        referenceVideoFileInput.addEventListener('change', updateReferenceVideoInfo);
+    }
+    if (youtubeOption) {
+        youtubeOption.addEventListener('change', toggleReferenceVideoInputs);
+    }
+    if (fileOption) {
+        fileOption.addEventListener('change', toggleReferenceVideoInputs);
+    }
 
     function toggleReferenceVideoInputs() {
         if (youtubeOption.checked) {
@@ -174,52 +187,54 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    videoForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const formData = new FormData();
+    if (videoForm) {
+        videoForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
 
-        try {
-            // Upload personal video
-            const personalVideo = personalVideoInput.files[0];
-            if (!personalVideo) {
-                throw new Error('Personal video is required');
-            }
-
-            const personalVideoUploadData = await getUploadUrl(personalVideo);
-            await uploadFileToS3(personalVideo, personalVideoUploadData.uploadUrl);
-            formData.append('personal_video_s3_key', personalVideoUploadData.s3Key);
-
-            // Upload reference video or add YouTube URL
-            if (youtubeOption.checked) {
-                formData.append('youtube_url', youtubeUrlInput.value);
-            } else {
-                const referenceVideo = referenceVideoFileInput.files[0];
-                if (referenceVideo) {
-                    const referenceVideoUploadData = await getUploadUrl(referenceVideo);
-                    await uploadFileToS3(referenceVideo, referenceVideoUploadData.uploadUrl);
-                    formData.append('reference_video_s3_key', referenceVideoUploadData.s3Key);
+            try {
+                // Upload personal video
+                const personalVideo = personalVideoInput.files[0];
+                if (!personalVideo) {
+                    throw new Error('Personal video is required');
                 }
+
+                const personalVideoUploadData = await getUploadUrl(personalVideo);
+                await uploadFileToS3(personalVideo, personalVideoUploadData.uploadUrl);
+                formData.append('personal_video_s3_key', personalVideoUploadData.s3Key);
+
+                // Upload reference video or add YouTube URL
+                if (youtubeOption.checked) {
+                    formData.append('youtube_url', youtubeUrlInput.value);
+                } else {
+                    const referenceVideo = referenceVideoFileInput.files[0];
+                    if (referenceVideo) {
+                        const referenceVideoUploadData = await getUploadUrl(referenceVideo);
+                        await uploadFileToS3(referenceVideo, referenceVideoUploadData.uploadUrl);
+                        formData.append('reference_video_s3_key', referenceVideoUploadData.s3Key);
+                    }
+                }
+
+                // Process videos
+                const response = await fetch('/process_videos', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    fusedVideo.src = data.fused_video_url;
+                    resultSection.classList.remove('d-none');
+                } else {
+                    alert('Error processing videos: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Error processing videos:', error);
+                alert('An error occurred. Please try again.');
             }
-
-            // Process videos
-            const response = await fetch('/process_videos', {
-                method: 'POST',
-                body: formData
-            });
-
-            const data = await response.json();
-
-            if (data.status === 'success') {
-                fusedVideo.src = data.fused_video_url;
-                resultSection.classList.remove('d-none');
-            } else {
-                alert('Error processing videos: ' + data.message);
-            }
-        } catch (error) {
-            console.error('Error processing videos:', error);
-            alert('An error occurred. Please try again.');
-        }
-    });
+        });
+    }
 
     function formatDuration(seconds) {
         const minutes = Math.floor(seconds / 60);

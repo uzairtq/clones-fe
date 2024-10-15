@@ -1,12 +1,15 @@
 import os
 import logging
-from flask import Flask, render_template, request, jsonify
-from models import db, Video
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from models import db, Video, User
 from utils.youtube_api import get_youtube_video_info
 from werkzeug.utils import secure_filename
 import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
 from uuid import uuid4
+from urllib.parse import urlparse
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///videos.db'
@@ -32,10 +35,6 @@ def init_s3_client():
             region_name=S3_REGION
         )
         logger.info("S3 client initialized successfully")
-        logger.info(f"AWS_ACCESS_KEY_ID length: {len(os.environ.get('AWS_ACCESS_KEY_ID', ''))}")
-        logger.info(f"AWS_SECRET_ACCESS_KEY length: {len(os.environ.get('AWS_SECRET_ACCESS_KEY', ''))}")
-        logger.info(f"S3_BUCKET: {S3_BUCKET}")
-        logger.info(f"S3_REGION: {S3_REGION}")
         return s3_client
     except Exception as e:
         logger.error(f"Failed to initialize S3 client: {str(e)}")
@@ -44,6 +43,13 @@ def init_s3_client():
 s3_client = init_s3_client()
 
 db.init_app(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 with app.app_context():
     db.create_all()
@@ -51,6 +57,48 @@ with app.app_context():
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(username=username).first()
+        if user:
+            flash('Username already exists')
+            return redirect(url_for('register'))
+        
+        new_user = User(username=username, email=email, password=generate_password_hash(password))
+        db.session.add(new_user)
+        db.session.commit()
+        
+        flash('Registration successful. Please log in.')
+        return redirect(url_for('login'))
+    
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            return redirect(url_for('index'))
+        else:
+            flash('Invalid username or password')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
 
 def test_aws_credentials():
     if not s3_client:
@@ -71,6 +119,7 @@ def test_aws_credentials():
         return False, f"AWS credentials test failed: {str(e)}"
 
 @app.route('/get-upload-url', methods=['POST'])
+@login_required
 def get_upload_url():
     if not s3_client:
         return jsonify({'status': 'error', 'message': 'S3 client not initialized'}), 500
@@ -82,7 +131,7 @@ def get_upload_url():
         return jsonify({'status': 'error', 'message': 'File name and type are required'}), 400
 
     file_name = secure_filename(file_name)
-    s3_key = f"uploads/{uuid4()}-{file_name}"
+    s3_key = f"uploads/{current_user.id}/{uuid4()}-{file_name}"
 
     try:
         presigned_url = s3_client.generate_presigned_url(
@@ -106,6 +155,7 @@ def get_upload_url():
         return jsonify({'status': 'error', 'message': 'Failed to generate upload URL'}), 500
 
 @app.route('/process_videos', methods=['POST'])
+@login_required
 def process_videos():
     aws_creds_test, aws_creds_message = test_aws_credentials()
     if not aws_creds_test:
@@ -138,7 +188,8 @@ def process_videos():
         personal_video_url=personal_video_url,
         reference_video_url=reference_video_url,
         reference_video_title=reference_video_title,
-        reference_video_thumbnail=reference_video_thumbnail
+        reference_video_thumbnail=reference_video_thumbnail,
+        user_id=current_user.id
     )
     db.session.add(new_video)
     db.session.commit()
