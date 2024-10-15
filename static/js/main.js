@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             mediaRecorder.onstop = () => {
                 const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                console.log('Recorded video blob:', blob.size, blob.type);
                 const file = new File([blob], 'recorded_video.webm', { type: 'video/webm' });
                 const dataTransfer = new DataTransfer();
                 dataTransfer.items.add(file);
@@ -78,25 +79,40 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Promise((resolve, reject) => {
             const video = document.createElement('video');
             video.preload = 'metadata';
+            console.log('Generating thumbnail for:', file.name);
+
             video.onloadedmetadata = () => {
-                video.currentTime = 1; // Seek to 1 second
+                console.log('Video metadata loaded');
+                video.currentTime = 2; // Seek to 2 seconds
             };
-            video.onseeked = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = 320;
-                canvas.height = 180;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const thumbnailDataUrl = canvas.toDataURL('image/jpeg');
-                URL.revokeObjectURL(video.src); // Clean up the object URL
-                resolve(thumbnailDataUrl);
-            };
+
+            video.addEventListener('loadeddata', () => {
+                console.log('Video data loaded');
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 320;
+                    canvas.height = 180;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const thumbnailDataUrl = canvas.toDataURL('image/jpeg');
+                    console.log('Thumbnail generated successfully');
+                    URL.revokeObjectURL(video.src);
+                    resolve(thumbnailDataUrl);
+                } catch (error) {
+                    console.error('Error generating thumbnail:', error);
+                    reject(error);
+                }
+            });
+
             video.onerror = (e) => {
-                console.error('Error generating thumbnail:', e);
-                URL.revokeObjectURL(video.src); // Clean up the object URL
+                console.error('Error loading video for thumbnail:', e);
+                URL.revokeObjectURL(video.src);
                 reject(e);
             };
-            video.src = URL.createObjectURL(file);
+
+            const url = URL.createObjectURL(file);
+            console.log('Video URL created:', url);
+            video.src = url;
         });
     }
 
@@ -104,16 +120,38 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Promise((resolve, reject) => {
             const video = document.createElement('video');
             video.preload = 'metadata';
+            console.log('Getting duration for:', file.name);
+
             video.onloadedmetadata = () => {
-                resolve(video.duration);
-                URL.revokeObjectURL(video.src);
+                console.log('Metadata loaded. Duration:', video.duration);
+                if (isNaN(video.duration) || video.duration === Infinity) {
+                    console.log('Invalid duration, waiting for loadeddata event');
+                } else {
+                    URL.revokeObjectURL(video.src);
+                    resolve(video.duration);
+                }
             };
+
+            video.addEventListener('loadeddata', () => {
+                console.log('Video data loaded. Duration:', video.duration);
+                if (isNaN(video.duration) || video.duration === Infinity) {
+                    console.error('Invalid duration after loadeddata');
+                    reject(new Error('Invalid video duration'));
+                } else {
+                    URL.revokeObjectURL(video.src);
+                    resolve(video.duration);
+                }
+            });
+
             video.onerror = (e) => {
                 console.error('Error getting video duration:', e);
                 URL.revokeObjectURL(video.src);
                 reject(e);
             };
-            video.src = URL.createObjectURL(file);
+
+            const url = URL.createObjectURL(file);
+            console.log('Video URL created for duration:', url);
+            video.src = url;
         });
     }
 
@@ -121,11 +159,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const file = personalVideoInput.files[0];
         if (file) {
             try {
+                console.log('Processing file:', file.name);
                 const [duration, thumbnailDataUrl] = await Promise.all([
                     getDuration(file),
                     generateThumbnail(file)
                 ]);
 
+                console.log('File processed successfully');
                 personalVideoInfo.innerHTML = `
                     <h5>Personal Video</h5>
                     <p>Filename: ${file.name}</p>
@@ -138,6 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <h5>Personal Video</h5>
                     <p>Filename: ${file.name}</p>
                     <p class="text-danger">Error processing video: ${error.message}</p>
+                    <p>Please try uploading the video again or use a different video file.</p>
                 `;
             }
         } else {
@@ -296,6 +337,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatDuration(seconds) {
+        if (isNaN(seconds) || seconds === Infinity) {
+            return 'Unknown';
+        }
         const hours = Math.floor(seconds / 3600);
         const minutes = Math.floor((seconds % 3600) / 60);
         const remainingSeconds = Math.floor(seconds % 60);
