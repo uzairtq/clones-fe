@@ -94,57 +94,51 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function updatePersonalVideoInfo() {
+    function getDuration(file) {
+        return new Promise((resolve, reject) => {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                audioContext.decodeAudioData(e.target.result, function(buffer) {
+                    resolve(buffer.duration);
+                }, function(e) {
+                    reject(e);
+                });
+            };
+            reader.onerror = function(e) {
+                reject(e);
+            };
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    async function updatePersonalVideoInfo() {
         const file = personalVideoInput.files[0];
         if (file) {
-            const videoElement = document.createElement('video');
-            videoElement.preload = 'metadata';
+            try {
+                const [duration, thumbnailDataUrl] = await Promise.all([
+                    getDuration(file),
+                    generateThumbnail(file)
+                ]);
 
-            const updateInfo = async () => {
-                try {
-                    const duration = videoElement.duration;
-                    if (isNaN(duration) || duration === Infinity) {
-                        throw new Error('Invalid duration');
-                    }
-                    const thumbnailDataUrl = await generateThumbnail(file);
-                    personalVideoInfo.innerHTML = `
-                        <h5>Personal Video</h5>
-                        <p>Filename: ${file.name}</p>
-                        <p>Duration: ${formatDuration(duration)}</p>
-                        <img src="${thumbnailDataUrl}" alt="Personal Video Thumbnail" class="img-fluid mt-2 personal-thumbnail">
-                    `;
-                } catch (error) {
-                    console.error('Error processing video:', error);
-                    personalVideoInfo.innerHTML = `
-                        <h5>Personal Video</h5>
-                        <p>Filename: ${file.name}</p>
-                        <p class="text-danger">Error processing video: ${error.message}</p>
-                    `;
+                if (isNaN(duration) || duration <= 0) {
+                    throw new Error('Invalid duration');
                 }
-            };
 
-            videoElement.onloadedmetadata = updateInfo;
-            videoElement.onerror = () => {
-                console.error('Error loading video metadata');
                 personalVideoInfo.innerHTML = `
                     <h5>Personal Video</h5>
                     <p>Filename: ${file.name}</p>
-                    <p class="text-danger">Error loading video metadata</p>
+                    <p>Duration: ${formatDuration(duration)}</p>
+                    <img src="${thumbnailDataUrl}" alt="Personal Video Thumbnail" class="img-fluid mt-2 personal-thumbnail">
                 `;
-            };
-
-            videoElement.src = URL.createObjectURL(file);
-
-            // Set a timeout in case the metadata doesn't load
-            setTimeout(() => {
-                if (personalVideoInfo.innerHTML === '') {
-                    personalVideoInfo.innerHTML = `
-                        <h5>Personal Video</h5>
-                        <p>Filename: ${file.name}</p>
-                        <p class="text-warning">Unable to determine video duration</p>
-                    `;
-                }
-            }, 5000);
+            } catch (error) {
+                console.error('Error processing video:', error);
+                personalVideoInfo.innerHTML = `
+                    <h5>Personal Video</h5>
+                    <p>Filename: ${file.name}</p>
+                    <p class="text-danger">Error processing video: ${error.message}</p>
+                `;
+            }
         } else {
             personalVideoInfo.innerHTML = '';
         }
