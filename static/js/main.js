@@ -5,9 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const stopRecordingButton = document.getElementById('stop-recording');
     const videoPreview = document.getElementById('video-preview');
     const youtubeUrlInput = document.getElementById('youtube-url');
-    const referenceVideoFileInput = document.getElementById('reference-video-file');
-    const youtubeOption = document.getElementById('youtube-option');
-    const fileOption = document.getElementById('file-option');
     const personalVideoInfo = document.getElementById('personal-video-info');
     const referenceVideoInfo = document.getElementById('reference-video-info');
     const resultSection = document.getElementById('result');
@@ -73,26 +70,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (youtubeUrlInput) {
         youtubeUrlInput.addEventListener('input', updateReferenceVideoInfo);
     }
-    if (referenceVideoFileInput) {
-        referenceVideoFileInput.addEventListener('change', updateReferenceVideoInfo);
-    }
-    if (youtubeOption) {
-        youtubeOption.addEventListener('change', toggleReferenceVideoInputs);
-    }
-    if (fileOption) {
-        fileOption.addEventListener('change', toggleReferenceVideoInputs);
-    }
-
-    function toggleReferenceVideoInputs() {
-        if (youtubeOption.checked) {
-            youtubeUrlInput.classList.remove('d-none');
-            referenceVideoFileInput.classList.add('d-none');
-        } else {
-            youtubeUrlInput.classList.add('d-none');
-            referenceVideoFileInput.classList.remove('d-none');
-        }
-        updateReferenceVideoInfo();
-    }
 
     function updatePersonalVideoInfo() {
         const file = personalVideoInput.files[0];
@@ -114,43 +91,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateReferenceVideoInfo() {
-        if (youtubeOption.checked) {
-            const youtubeUrl = youtubeUrlInput.value;
-            if (youtubeUrl) {
-                // In a real application, you would make an API call to get video information
-                // For this example, we'll use mock data
-                const mockData = {
-                    title: 'Sample YouTube Video',
-                    thumbnail: 'https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg',
-                    duration: 212
-                };
+        const youtubeUrl = youtubeUrlInput.value;
+        if (youtubeUrl) {
+            // In a real application, you would make an API call to get video information
+            // For this example, we'll use mock data
+            const mockData = {
+                title: 'Sample YouTube Video',
+                thumbnail: 'https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg',
+                duration: 212
+            };
 
-                referenceVideoInfo.innerHTML = `
-                    <h5>YouTube Video</h5>
-                    <p>Title: ${mockData.title}</p>
-                    <p>Duration: ${formatDuration(mockData.duration)}</p>
-                    <img src="${mockData.thumbnail}" alt="YouTube Thumbnail" class="img-fluid mt-2">
-                `;
-            } else {
-                referenceVideoInfo.innerHTML = '';
-            }
+            referenceVideoInfo.innerHTML = `
+                <h5>YouTube Video</h5>
+                <p>Title: ${mockData.title}</p>
+                <p>Duration: ${formatDuration(mockData.duration)}</p>
+                <img src="${mockData.thumbnail}" alt="YouTube Thumbnail" class="img-fluid mt-2">
+            `;
         } else {
-            const file = referenceVideoFileInput.files[0];
-            if (file) {
-                const videoElement = document.createElement('video');
-                videoElement.preload = 'metadata';
-                videoElement.onloadedmetadata = () => {
-                    const duration = videoElement.duration;
-                    referenceVideoInfo.innerHTML = `
-                        <h5>Reference Video</h5>
-                        <p>Filename: ${file.name}</p>
-                        <p>Duration: ${formatDuration(duration)}</p>
-                    `;
-                };
-                videoElement.src = URL.createObjectURL(file);
-            } else {
-                referenceVideoInfo.innerHTML = '';
-            }
+            referenceVideoInfo.innerHTML = '';
         }
     }
 
@@ -194,17 +152,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 await uploadFileToS3(personalVideo, personalVideoUploadData.uploadUrl);
                 formData.append('personal_video_s3_key', personalVideoUploadData.s3Key);
 
-                // Upload reference video or add YouTube URL
-                if (youtubeOption.checked) {
-                    formData.append('youtube_url', youtubeUrlInput.value);
-                } else {
-                    const referenceVideo = referenceVideoFileInput.files[0];
-                    if (referenceVideo) {
-                        const referenceVideoUploadData = await getUploadUrl(referenceVideo);
-                        await uploadFileToS3(referenceVideo, referenceVideoUploadData.uploadUrl);
-                        formData.append('reference_video_s3_key', referenceVideoUploadData.s3Key);
-                    }
-                }
+                // Add YouTube URL
+                formData.append('youtube_url', youtubeUrlInput.value);
 
                 // Process videos
                 const response = await fetch('/process_videos', {

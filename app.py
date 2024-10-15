@@ -52,33 +52,27 @@ def get_upload_url():
 @app.route('/process_videos', methods=['POST'])
 def process_videos():
     personal_video_s3_key = request.form.get('personal_video_s3_key')
-    reference_video_s3_key = request.form.get('reference_video_s3_key')
     youtube_url = request.form.get('youtube_url')
 
     if not personal_video_s3_key:
         return jsonify({'status': 'error', 'message': 'Personal video S3 key is required'}), 400
 
+    if not youtube_url:
+        return jsonify({'status': 'error', 'message': 'YouTube URL is required'}), 400
+
     personal_video_url = f"https://example.com/{personal_video_s3_key}"
 
-    # Process reference video
-    if youtube_url:
-        youtube_info = get_youtube_video_info(youtube_url)
-        reference_video_url = youtube_url
-        reference_video_title = youtube_info['title'] if youtube_info else 'Unknown YouTube Video'
-        reference_video_thumbnail = youtube_info['thumbnail'] if youtube_info else None
-    elif reference_video_s3_key:
-        reference_video_url = f"https://example.com/{reference_video_s3_key}"
-        reference_video_title = os.path.basename(reference_video_s3_key)
-        reference_video_thumbnail = None
-    else:
-        return jsonify({'status': 'error', 'message': 'Reference video S3 key or YouTube URL is required'}), 400
+    # Process reference video (YouTube)
+    youtube_info = get_youtube_video_info(youtube_url)
+    if not youtube_info:
+        return jsonify({'status': 'error', 'message': 'Invalid YouTube URL or unable to fetch video info'}), 400
 
     # Save video information to database
     new_video = Video(
         personal_video_url=personal_video_url,
-        reference_video_url=reference_video_url,
-        reference_video_title=reference_video_title,
-        reference_video_thumbnail=reference_video_thumbnail
+        reference_video_url=youtube_url,
+        reference_video_title=youtube_info['title'],
+        reference_video_thumbnail=youtube_info['thumbnail']
     )
     db.session.add(new_video)
     db.session.commit()
