@@ -85,30 +85,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 const canvas = document.createElement('canvas');
                 canvas.width = 320;
                 canvas.height = 180;
-                canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 const thumbnailDataUrl = canvas.toDataURL('image/jpeg');
+                URL.revokeObjectURL(video.src); // Clean up the object URL
                 resolve(thumbnailDataUrl);
             };
-            video.onerror = reject;
+            video.onerror = (e) => {
+                console.error('Error generating thumbnail:', e);
+                URL.revokeObjectURL(video.src); // Clean up the object URL
+                reject(e);
+            };
             video.src = URL.createObjectURL(file);
         });
     }
 
     function getDuration(file) {
         return new Promise((resolve, reject) => {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                audioContext.decodeAudioData(e.target.result, function(buffer) {
-                    resolve(buffer.duration);
-                }, function(e) {
-                    reject(e);
-                });
+            const video = document.createElement('video');
+            video.preload = 'metadata';
+            video.onloadedmetadata = () => {
+                resolve(video.duration);
+                URL.revokeObjectURL(video.src);
             };
-            reader.onerror = function(e) {
+            video.onerror = (e) => {
+                console.error('Error getting video duration:', e);
+                URL.revokeObjectURL(video.src);
                 reject(e);
             };
-            reader.readAsArrayBuffer(file);
+            video.src = URL.createObjectURL(file);
         });
     }
 
