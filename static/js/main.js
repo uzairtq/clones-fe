@@ -34,10 +34,11 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             videoPreview.srcObject = stream;
+            videoPreview.muted = true;
             videoPreview.play();
             videoPreview.classList.remove('d-none');
 
-            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' });
 
             mediaRecorder.ondataavailable = (event) => {
                 if (event.data.size > 0) {
@@ -81,6 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (recordedVideoBlob) {
             const videoURL = URL.createObjectURL(recordedVideoBlob);
             videoPreview.src = videoURL;
+            videoPreview.muted = false;
             videoPreview.classList.remove('d-none');
             videoPreview.play();
         }
