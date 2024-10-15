@@ -65,7 +65,7 @@ def process_videos():
     # Process reference video (YouTube)
     youtube_info = get_youtube_video_info(youtube_url)
     if not youtube_info:
-        return jsonify({'status': 'error', 'message': 'Invalid YouTube URL or unable to fetch video info'}), 400
+        return jsonify({'status': 'error', 'message': 'Invalid YouTube URL'}), 400
 
     # Save video information to database
     new_video = Video(
