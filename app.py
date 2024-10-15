@@ -9,6 +9,7 @@ from werkzeug.utils import secure_filename
 from uuid import uuid4
 from urllib.parse import urlparse
 import psutil
+import isodate
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -140,6 +141,11 @@ def get_youtube_info():
     video_info = get_youtube_video_info(youtube_url)
     if not video_info:
         return jsonify({'error': 'Invalid YouTube URL or unable to fetch video information'}), 400
+
+    # Convert duration to a more user-friendly format
+    duration = isodate.parse_duration(video_info['duration'])
+    minutes, seconds = divmod(duration.total_seconds(), 60)
+    video_info['duration'] = f"{int(minutes)}:{int(seconds):02d}"
 
     return jsonify(video_info)
 

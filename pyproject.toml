@@ -13,4 +13,5 @@ dependencies = [
     "boto3>=1.35.40",
     "flask-login>=0.6.3",
     "psutil>=6.0.0",
+    "isodate>=0.7.2",
 ]
