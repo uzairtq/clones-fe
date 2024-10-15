@@ -32,6 +32,9 @@ except Exception as e:
 
 S3_BUCKET = os.environ.get('S3_BUCKET')
 
+# In-memory storage for fused videos (replace with a database in a production environment)
+fused_videos = []
+
 def generate_presigned_url(file_name, file_type):
     if not s3_client:
         logger.error("S3 client is not initialized. Cannot generate presigned URL.")
@@ -52,7 +55,7 @@ def generate_presigned_url(file_name, file_type):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', fused_videos=fused_videos)
 
 @app.route('/get-upload-url', methods=['POST'])
 def get_upload_url():
@@ -117,11 +120,23 @@ def process_videos():
         # For now, we'll just return the personal video URL as the fused video
         fused_video_url = personal_video_url
 
+        # Store fused video information
+        fused_video = {
+            'personal_video_url': personal_video_url,
+            'youtube_url': youtube_url,
+            'youtube_title': youtube_info['title'],
+            'youtube_thumbnail': youtube_info['thumbnail'],
+            'fused_video_url': fused_video_url
+        }
+        fused_videos.append(fused_video)
+
         logger.debug("Video processing completed successfully")
+        logger.debug(f"Fused video added to gallery: {fused_video}")
         return jsonify({
             'status': 'success',
             'message': 'Video processing completed successfully.',
             'fused_video_url': fused_video_url,
+            'fused_video': fused_video
         })
 
     except Exception as e:
