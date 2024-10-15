@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
             stopRecordingButton.classList.remove('d-none');
         } catch (error) {
             console.error('Error accessing camera:', error);
-            alert('Unable to access camera. Please make sure you have granted the necessary permissions and that no other application is using the camera.');
+            showErrorMessage('Unable to access camera. Please make sure you have granted the necessary permissions and that no other application is using the camera.');
         }
     }
 
@@ -126,7 +126,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to get upload URL');
+            const errorData = await response.json();
+            throw new Error(`Failed to get upload URL: ${errorData.message}`);
         }
 
         return response.json();
@@ -142,7 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to upload file to S3');
+            throw new Error(`Failed to upload file to S3: ${response.statusText}`);
         }
     }
 
@@ -176,18 +177,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.status === 'success') {
                     fusedVideo.src = data.fused_video_url;
                     resultSection.classList.remove('d-none');
-                    simulationMessage.innerHTML = `
-                        <div class="alert alert-info mt-3" role="alert">
-                            ${data.message}
-                        </div>
-                    `;
-                    simulationMessage.classList.remove('d-none');
+                    showSuccessMessage(data.message);
                 } else {
-                    alert('Error processing videos: ' + data.message);
+                    showErrorMessage(`Error processing videos: ${data.message}`);
                 }
             } catch (error) {
                 console.error('Error processing videos:', error);
-                alert('An error occurred. Please try again.');
+                showErrorMessage(`An error occurred: ${error.message}`);
             }
         });
     }
@@ -196,5 +192,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const minutes = Math.floor(seconds / 60);
         const remainingSeconds = Math.floor(seconds % 60);
         return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+
+    function showErrorMessage(message) {
+        simulationMessage.innerHTML = `
+            <div class="alert alert-danger mt-3" role="alert">
+                ${message}
+            </div>
+        `;
+        simulationMessage.classList.remove('d-none');
+    }
+
+    function showSuccessMessage(message) {
+        simulationMessage.innerHTML = `
+            <div class="alert alert-success mt-3" role="alert">
+                ${message}
+            </div>
+        `;
+        simulationMessage.classList.remove('d-none');
     }
 });

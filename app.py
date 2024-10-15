@@ -1,5 +1,6 @@
 import os
 import logging
+import traceback
 import boto3
 from botocore.exceptions import ClientError
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
@@ -49,7 +50,8 @@ def generate_presigned_url(file_name, file_type):
                                                             'ContentType': file_type},
                                                     ExpiresIn=3600)
     except ClientError as e:
-        logging.error(e)
+        logger.error(f"Error generating presigned URL: {str(e)}")
+        logger.error(traceback.format_exc())
         return None
     return {'uploadUrl': response, 's3Key': s3_key}
 
@@ -129,42 +131,48 @@ def get_upload_url():
 @app.route('/process_videos', methods=['POST'])
 @login_required
 def process_videos():
-    personal_video_s3_key = request.form.get('personal_video_s3_key')
-    youtube_url = request.form.get('youtube_url')
+    try:
+        personal_video_s3_key = request.form.get('personal_video_s3_key')
+        youtube_url = request.form.get('youtube_url')
 
-    if not personal_video_s3_key:
-        return jsonify({'status': 'error', 'message': 'Personal video S3 key is required'}), 400
+        if not personal_video_s3_key:
+            return jsonify({'status': 'error', 'message': 'Personal video S3 key is required'}), 400
 
-    if not youtube_url:
-        return jsonify({'status': 'error', 'message': 'YouTube URL is required'}), 400
+        if not youtube_url:
+            return jsonify({'status': 'error', 'message': 'YouTube URL is required'}), 400
 
-    personal_video_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{personal_video_s3_key}"
+        personal_video_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{personal_video_s3_key}"
 
-    # Process reference video (YouTube)
-    youtube_info = get_youtube_video_info(youtube_url)
-    if not youtube_info:
-        return jsonify({'status': 'error', 'message': 'Invalid YouTube URL'}), 400
+        # Process reference video (YouTube)
+        youtube_info = get_youtube_video_info(youtube_url)
+        if not youtube_info:
+            return jsonify({'status': 'error', 'message': 'Invalid YouTube URL'}), 400
 
-    # Save video information to database
-    new_video = Video(
-        personal_video_url=personal_video_url,
-        reference_video_url=youtube_url,
-        reference_video_title=youtube_info['title'],
-        reference_video_thumbnail=youtube_info['thumbnail'],
-        user_id=current_user.id
-    )
-    db.session.add(new_video)
-    db.session.commit()
+        # Save video information to database
+        new_video = Video(
+            personal_video_url=personal_video_url,
+            reference_video_url=youtube_url,
+            reference_video_title=youtube_info['title'],
+            reference_video_thumbnail=youtube_info['thumbnail'],
+            user_id=current_user.id
+        )
+        db.session.add(new_video)
+        db.session.commit()
 
-    # TODO: Implement actual video fusion logic
-    # For now, we'll just return the personal video URL as the fused video
-    fused_video_url = personal_video_url
+        # TODO: Implement actual video fusion logic
+        # For now, we'll just return the personal video URL as the fused video
+        fused_video_url = personal_video_url
 
-    return jsonify({
-        'status': 'success',
-        'message': 'Video processing completed successfully.',
-        'fused_video_url': fused_video_url
-    })
+        return jsonify({
+            'status': 'success',
+            'message': 'Video processing completed successfully.',
+            'fused_video_url': fused_video_url
+        })
+
+    except Exception as e:
+        logger.error(f"Error processing videos: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'status': 'error', 'message': f'An error occurred: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
