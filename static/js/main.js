@@ -78,56 +78,17 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Promise((resolve, reject) => {
             const video = document.createElement('video');
             video.preload = 'metadata';
-            let attemptedTimestamps = [];
-
-            const tryGenerateThumbnail = () => {
+            video.onloadedmetadata = () => {
+                video.currentTime = 1; // Seek to 1 second
+            };
+            video.onseeked = () => {
                 const canvas = document.createElement('canvas');
                 canvas.width = 320;
                 canvas.height = 180;
                 canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
                 const thumbnailDataUrl = canvas.toDataURL('image/jpeg');
-
-                const img = new Image();
-                img.onload = () => {
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const data = imageData.data;
-
-                    let isBlack = true;
-                    for (let i = 0; i < data.length; i += 4) {
-                        if (data[i] > 10 || data[i + 1] > 10 || data[i + 2] > 10) {
-                            isBlack = false;
-                            break;
-                        }
-                    }
-
-                    if (!isBlack) {
-                        resolve(thumbnailDataUrl);
-                    } else {
-                        tryNextTimestamp();
-                    }
-                };
-                img.src = thumbnailDataUrl;
+                resolve(thumbnailDataUrl);
             };
-
-            const tryNextTimestamp = () => {
-                const timestamps = [0.25, 0.5, 0.75];
-                let nextTimestamp = timestamps.find(t => !attemptedTimestamps.includes(t));
-
-                if (nextTimestamp) {
-                    attemptedTimestamps.push(nextTimestamp);
-                    video.currentTime = video.duration * nextTimestamp;
-                } else {
-                    tryGenerateThumbnail();
-                }
-            };
-
-            video.onloadedmetadata = () => {
-                video.currentTime = video.duration / 2;
-            };
-
-            video.onseeked = tryGenerateThumbnail;
             video.onerror = reject;
             video.src = URL.createObjectURL(file);
         });
