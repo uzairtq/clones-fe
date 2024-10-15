@@ -131,6 +131,18 @@ def process_videos():
         logger.error(traceback.format_exc())
         return jsonify({'status': 'error', 'message': f'An error occurred: {str(e)}. Please try again later.'}), 500
 
+@app.route('/get_youtube_info', methods=['GET'])
+def get_youtube_info():
+    youtube_url = request.args.get('url')
+    if not youtube_url:
+        return jsonify({'error': 'YouTube URL is required'}), 400
+
+    video_info = get_youtube_video_info(youtube_url)
+    if not video_info:
+        return jsonify({'error': 'Invalid YouTube URL or unable to fetch video information'}), 400
+
+    return jsonify(video_info)
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     health_status = {

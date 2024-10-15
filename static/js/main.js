@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const uploadedVideo = document.getElementById('uploaded-video');
     const uploadMessage = document.getElementById('upload-message');
     const serverStatus = document.getElementById('server-status');
+    const uploadButton = document.getElementById('upload-button');
 
     let mediaRecorder;
     let recordedChunks = [];
@@ -95,20 +96,28 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateReferenceVideoInfo() {
         const youtubeUrl = youtubeUrlInput.value;
         if (youtubeUrl) {
-            const mockData = {
-                title: 'Sample YouTube Video',
-                thumbnail: 'https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg',
-                duration: 212
-            };
-
-            referenceVideoInfo.innerHTML = `
-                <h5>YouTube Video</h5>
-                <p>Title: ${mockData.title}</p>
-                <p>Duration: ${formatDuration(mockData.duration)}</p>
-                <img src="${mockData.thumbnail}" alt="YouTube Thumbnail" class="img-fluid mt-2">
-            `;
+            fetchYouTubeInfo(youtubeUrl);
         } else {
             referenceVideoInfo.innerHTML = '';
+        }
+    }
+
+    async function fetchYouTubeInfo(url) {
+        try {
+            const response = await fetchWithRetry(`/get_youtube_info?url=${encodeURIComponent(url)}`);
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            referenceVideoInfo.innerHTML = `
+                <h5>YouTube Video</h5>
+                <p>Title: ${data.title}</p>
+                <p>Duration: ${formatDuration(data.duration)}</p>
+                <img src="${data.thumbnail}" alt="YouTube Thumbnail" class="img-fluid mt-2">
+            `;
+        } catch (error) {
+            console.error('Error fetching YouTube info:', error);
+            referenceVideoInfo.innerHTML = `<p class="text-danger">Error: ${error.message}</p>`;
         }
     }
 
@@ -170,9 +179,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData();
 
             try {
+                uploadButton.disabled = true;
+                uploadButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading...';
+
                 const personalVideo = personalVideoInput.files[0];
                 if (!personalVideo) {
                     throw new Error('Personal video is required');
+                }
+
+                const youtubeUrl = youtubeUrlInput.value;
+                if (!youtubeUrl) {
+                    throw new Error('YouTube URL is required');
                 }
 
                 const personalVideoUploadData = await getUploadUrl(personalVideo);
@@ -180,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await uploadFileToS3(personalVideo, personalVideoUploadData.uploadUrl);
                 formData.append('personal_video_s3_key', personalVideoUploadData.s3Key);
 
-                formData.append('youtube_url', youtubeUrlInput.value);
+                formData.append('youtube_url', youtubeUrl);
 
                 const response = await fetchWithRetry('/process_videos', {
                     method: 'POST',
@@ -199,6 +216,9 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 console.error('Error uploading video:', error);
                 showErrorMessage(`An error occurred: ${error.message}. Please try again later or contact support if the problem persists.`);
+            } finally {
+                uploadButton.disabled = false;
+                uploadButton.innerHTML = 'Upload Video';
             }
         });
     }
