@@ -85,6 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <h5>Personal Video</h5>
                     <p>Filename: ${file.name}</p>
                     <p>Duration: ${formatDuration(duration)}</p>
+                    <img src="" alt="Personal Video Thumbnail" class="img-fluid mt-2 personal-thumbnail">
                 `;
             };
             videoElement.src = URL.createObjectURL(file);
@@ -112,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
             referenceVideoInfo.innerHTML = `
                 <h5>YouTube Video</h5>
                 <p>Title: ${data.title}</p>
-                <p>Duration: ${formatDuration(data.duration)}</p>
+                <p>Duration: ${data.duration}</p>
                 <img src="${data.thumbnail}" alt="YouTube Thumbnail" class="img-fluid mt-2">
             `;
         } catch (error) {
@@ -210,6 +211,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     uploadedVideo.src = data.uploaded_video_url;
                     resultSection.classList.remove('d-none');
                     showSuccessMessage(data.message);
+                    
+                    // Update personal video thumbnail
+                    const personalThumbnail = document.querySelector('.personal-thumbnail');
+                    if (personalThumbnail) {
+                        personalThumbnail.src = data.personal_video_thumbnail;
+                    }
+
+                    // Update YouTube video info
+                    if (data.youtube_info) {
+                        referenceVideoInfo.innerHTML = `
+                            <h5>YouTube Video</h5>
+                            <p>Title: ${data.youtube_info.title}</p>
+                            <p>Duration: ${data.youtube_info.duration}</p>
+                            <img src="${data.youtube_info.thumbnail}" alt="YouTube Thumbnail" class="img-fluid mt-2">
+                        `;
+                    }
                 } else {
                     showErrorMessage(`Error uploading video: ${data.message}`);
                 }

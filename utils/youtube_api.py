@@ -47,17 +47,23 @@ def get_youtube_video_info(url):
         
         try:
             duration = isodate.parse_duration(duration_iso)
-            total_seconds = duration.total_seconds()
+            total_seconds = int(duration.total_seconds())
             logger.debug(f"Total seconds: {total_seconds}")
             
-            minutes, seconds = divmod(int(total_seconds), 60)
-            formatted_duration = f'{minutes}:{seconds:02d}'
+            minutes, seconds = divmod(total_seconds, 60)
+            hours, minutes = divmod(minutes, 60)
+            
+            if hours > 0:
+                formatted_duration = f'{hours}:{minutes:02d}:{seconds:02d}'
+            else:
+                formatted_duration = f'{minutes}:{seconds:02d}'
+            
             logger.debug(f"Formatted duration: {formatted_duration}")
         except Exception as duration_error:
             logger.error(f"Error parsing duration: {str(duration_error)}")
             formatted_duration = "00:00"  # Default duration if parsing fails
         
-        thumbnail = video_info["snippet"]["thumbnails"]["default"]["url"]
+        thumbnail = video_info["snippet"]["thumbnails"]["medium"]["url"]
 
         return {
             'title': title,

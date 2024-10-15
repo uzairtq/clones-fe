@@ -14,4 +14,6 @@ dependencies = [
     "flask-login>=0.6.3",
     "psutil>=6.0.0",
     "isodate>=0.7.2",
+    "moviepy>=1.0.3",
+    "pillow>=11.0.0",
 ]

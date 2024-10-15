@@ -10,6 +10,9 @@ from uuid import uuid4
 from urllib.parse import urlparse
 import psutil
 import isodate
+from moviepy.editor import VideoFileClip
+from PIL import Image
+import io
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -23,7 +26,7 @@ def initialize_s3_client():
             's3',
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
             aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-            region_name='us-east-1'  # Specify the correct region
+            region_name='us-east-1'
         )
     except NoCredentialsError:
         logger.error("AWS credentials not found. Please check your environment variables.")
@@ -53,6 +56,43 @@ def generate_presigned_url(file_name, file_type):
         logger.error(traceback.format_exc())
         return None
     return {'uploadUrl': response, 's3Key': s3_key}
+
+def generate_thumbnail(video_url):
+    try:
+        # Download the video file
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=video_url.split(f"{S3_BUCKET}/")[1])
+        video_data = response['Body'].read()
+
+        # Save the video file temporarily
+        temp_video_path = '/tmp/temp_video.mp4'
+        with open(temp_video_path, 'wb') as f:
+            f.write(video_data)
+
+        # Generate thumbnail
+        clip = VideoFileClip(temp_video_path)
+        thumbnail_frame = clip.get_frame(1)  # Get frame at 1 second
+        thumbnail_image = Image.fromarray(thumbnail_frame)
+
+        # Resize thumbnail
+        thumbnail_image.thumbnail((320, 240))
+
+        # Save thumbnail to bytes
+        thumbnail_bytes = io.BytesIO()
+        thumbnail_image.save(thumbnail_bytes, format='JPEG')
+        thumbnail_bytes.seek(0)
+
+        # Upload thumbnail to S3
+        thumbnail_key = f"thumbnails/{os.path.basename(video_url).split('.')[0]}.jpg"
+        s3_client.put_object(Bucket=S3_BUCKET, Key=thumbnail_key, Body=thumbnail_bytes, ContentType='image/jpeg')
+
+        # Clean up
+        clip.close()
+        os.remove(temp_video_path)
+
+        return f"https://{S3_BUCKET}.s3.amazonaws.com/{thumbnail_key}"
+    except Exception as e:
+        logger.error(f"Error generating thumbnail: {str(e)}")
+        return None
 
 @app.route('/')
 def index():
@@ -109,6 +149,9 @@ def process_videos():
         personal_video_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{personal_video_s3_key}"
         logger.debug(f"Personal video URL: {personal_video_url}")
 
+        # Generate thumbnail for personal video
+        personal_video_thumbnail = generate_thumbnail(personal_video_url)
+
         # Process reference video (YouTube)
         youtube_info = get_youtube_video_info(youtube_url)
         if not youtube_info:
@@ -124,7 +167,9 @@ def process_videos():
         return jsonify({
             'status': 'success',
             'message': 'Video uploaded successfully.',
-            'uploaded_video_url': uploaded_video_url
+            'uploaded_video_url': uploaded_video_url,
+            'personal_video_thumbnail': personal_video_thumbnail,
+            'youtube_info': youtube_info
         })
 
     except Exception as e:
