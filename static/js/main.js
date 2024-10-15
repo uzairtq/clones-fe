@@ -40,7 +40,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             mediaRecorder.onstop = () => {
                 const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                console.log('Recorded video blob:', blob.size, blob.type);
                 const file = new File([blob], 'recorded_video.webm', { type: 'video/webm' });
                 const dataTransfer = new DataTransfer();
                 dataTransfer.items.add(file);
@@ -79,74 +78,37 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Promise((resolve, reject) => {
             const video = document.createElement('video');
             video.preload = 'metadata';
-            console.log('Generating thumbnail for:', file.name);
-
             video.onloadedmetadata = () => {
-                console.log('Video metadata loaded');
-                video.currentTime = 2; // Seek to 2 seconds
+                video.currentTime = 1; // Seek to 1 second
             };
-
-            video.addEventListener('loadeddata', () => {
-                console.log('Video data loaded');
-                try {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 320;
-                    canvas.height = 180;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    const thumbnailDataUrl = canvas.toDataURL('image/jpeg');
-                    console.log('Thumbnail generated successfully');
-                    URL.revokeObjectURL(video.src);
-                    resolve(thumbnailDataUrl);
-                } catch (error) {
-                    console.error('Error generating thumbnail:', error);
-                    reject(error);
-                }
-            });
-
-            video.onerror = (e) => {
-                console.error('Error loading video for thumbnail:', e);
-                URL.revokeObjectURL(video.src);
-                reject(e);
+            video.onseeked = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 320;
+                canvas.height = 180;
+                canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                const thumbnailDataUrl = canvas.toDataURL('image/jpeg');
+                resolve(thumbnailDataUrl);
             };
-
-            const url = URL.createObjectURL(file);
-            console.log('Video URL created:', url);
-            video.src = url;
+            video.onerror = reject;
+            video.src = URL.createObjectURL(file);
         });
     }
 
     function getDuration(file) {
         return new Promise((resolve, reject) => {
-            const video = document.createElement('video');
-            video.preload = 'metadata';
-            
-            const timeoutId = setTimeout(() => {
-                reject(new Error('Timeout: Unable to get video duration'));
-            }, 10000); // 10 seconds timeout
-
-            video.onloadedmetadata = () => {
-                console.log('Video readyState:', video.readyState);
-                console.log('Video duration:', video.duration);
-                clearTimeout(timeoutId);
-                if (isFinite(video.duration)) {
-                    resolve(video.duration);
-                } else {
-                    reject(new Error('Invalid video duration'));
-                }
-                URL.revokeObjectURL(video.src);
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                audioContext.decodeAudioData(e.target.result, function(buffer) {
+                    resolve(buffer.duration);
+                }, function(e) {
+                    reject(e);
+                });
             };
-
-            video.onerror = (e) => {
-                clearTimeout(timeoutId);
-                reject(new Error(`Error loading video: ${e.target.error.message}`));
-                URL.revokeObjectURL(video.src);
+            reader.onerror = function(e) {
+                reject(e);
             };
-
-            console.log('Getting duration for:', file.name);
-            const url = URL.createObjectURL(file);
-            console.log('Video URL created for duration:', url);
-            video.src = url;
+            reader.readAsArrayBuffer(file);
         });
     }
 
@@ -154,17 +116,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const file = personalVideoInput.files[0];
         if (file) {
             try {
-                console.log('Processing file:', file.name);
-                console.log('File type:', file.type);
-                console.log('File size:', file.size);
-
                 const [duration, thumbnailDataUrl] = await Promise.all([
                     getDuration(file),
                     generateThumbnail(file)
                 ]);
 
-                console.log('File processed successfully');
-                console.log('Duration:', duration);
+                if (isNaN(duration) || duration <= 0) {
+                    throw new Error('Invalid duration');
+                }
+
                 personalVideoInfo.innerHTML = `
                     <h5>Personal Video</h5>
                     <p>Filename: ${file.name}</p>
@@ -177,7 +137,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <h5>Personal Video</h5>
                     <p>Filename: ${file.name}</p>
                     <p class="text-danger">Error processing video: ${error.message}</p>
-                    <p>Please try uploading the video again or use a different video file.</p>
                 `;
             }
         } else {
@@ -336,9 +295,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatDuration(seconds) {
-        if (isNaN(seconds) || seconds === Infinity) {
-            return 'Unknown';
-        }
         const hours = Math.floor(seconds / 3600);
         const minutes = Math.floor((seconds % 3600) / 60);
         const remainingSeconds = Math.floor(seconds % 60);
