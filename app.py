@@ -6,8 +6,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, Video, User
 from utils.youtube_api import get_youtube_video_info
 from werkzeug.utils import secure_filename
-import boto3
-from botocore.exceptions import NoCredentialsError, ClientError
 from uuid import uuid4
 from urllib.parse import urlparse
 
@@ -21,27 +19,6 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY") or "a secret key"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# AWS S3 configuration
-S3_BUCKET = os.environ.get('S3_BUCKET')
-S3_REGION = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
-
-# Initialize S3 client
-def init_s3_client():
-    try:
-        s3_client = boto3.client(
-            's3',
-            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-            region_name=S3_REGION
-        )
-        logger.info("S3 client initialized successfully")
-        return s3_client
-    except Exception as e:
-        logger.error(f"Failed to initialize S3 client: {str(e)}")
-        return None
-
-s3_client = init_s3_client()
-
 db.init_app(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -53,6 +30,13 @@ def load_user(user_id):
 
 with app.app_context():
     db.create_all()
+
+def get_dummy_presigned_url():
+    return {
+        "filename": "ad_v02.mp4",
+        "s3Key": "user-uploads/ad_v02-50c8000e-eb01-4f09-9810-53ff94959c89.mp4",
+        "uploadUrl": "https://clones-main.s3-accelerate.amazonaws.com/studio/670e67896360db8d4102b742/user-uploads/ad_v02-50c8000e-eb01-4f09-9810-53ff94959c89.mp4?AWSAccessKeyId=AKIAQE43KLS4A2UB4LIT&Signature=vUKEx6YilRNopt%2FqnJFtyltdSxE%3D&content-type=video%2Fmp4&Expires=1729001167"
+    }
 
 @app.route('/')
 def index():
@@ -100,67 +84,26 @@ def logout():
     logout_user()
     return redirect(url_for('index'))
 
-def test_aws_credentials():
-    if not s3_client:
-        logger.error("S3 client not initialized")
-        return False, "S3 client not initialized"
-
-    try:
-        s3_client.list_buckets()
-        logger.info("AWS credentials test successful")
-        return True, "AWS credentials test successful"
-    except ClientError as e:
-        error_code = e.response['Error']['Code']
-        error_message = e.response['Error']['Message']
-        logger.error(f"AWS credentials test failed: {error_code} - {error_message}")
-        return False, f"AWS credentials test failed: {error_code} - {error_message}"
-    except Exception as e:
-        logger.error(f"AWS credentials test failed: {str(e)}")
-        return False, f"AWS credentials test failed: {str(e)}"
-
 @app.route('/get-upload-url', methods=['POST'])
 @login_required
 def get_upload_url():
-    if not s3_client:
-        return jsonify({'status': 'error', 'message': 'S3 client not initialized'}), 500
-
     file_name = request.json.get('fileName')
     file_type = request.json.get('fileType')
 
     if not file_name or not file_type:
         return jsonify({'status': 'error', 'message': 'File name and type are required'}), 400
 
-    file_name = secure_filename(file_name)
-    s3_key = f"uploads/{current_user.id}/{uuid4()}-{file_name}"
-
-    try:
-        presigned_url = s3_client.generate_presigned_url(
-            'put_object',
-            Params={
-                'Bucket': S3_BUCKET,
-                'Key': s3_key,
-                'ContentType': file_type
-            },
-            ExpiresIn=3600
-        )
-
-        return jsonify({
-            'status': 'success',
-            'filename': file_name,
-            's3Key': s3_key,
-            'uploadUrl': presigned_url
-        })
-    except Exception as e:
-        logger.error(f"Error generating pre-signed URL: {str(e)}")
-        return jsonify({'status': 'error', 'message': 'Failed to generate upload URL'}), 500
+    dummy_data = get_dummy_presigned_url()
+    return jsonify({
+        'status': 'success',
+        'filename': dummy_data['filename'],
+        's3Key': dummy_data['s3Key'],
+        'uploadUrl': dummy_data['uploadUrl']
+    })
 
 @app.route('/process_videos', methods=['POST'])
 @login_required
 def process_videos():
-    aws_creds_test, aws_creds_message = test_aws_credentials()
-    if not aws_creds_test:
-        return jsonify({'status': 'error', 'message': f'AWS credentials test failed: {aws_creds_message}'}), 500
-
     personal_video_s3_key = request.form.get('personal_video_s3_key')
     reference_video_s3_key = request.form.get('reference_video_s3_key')
     youtube_url = request.form.get('youtube_url')
@@ -168,7 +111,7 @@ def process_videos():
     if not personal_video_s3_key:
         return jsonify({'status': 'error', 'message': 'Personal video S3 key is required'}), 400
 
-    personal_video_url = f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/{personal_video_s3_key}"
+    personal_video_url = f"https://example.com/{personal_video_s3_key}"
 
     # Process reference video
     if youtube_url:
@@ -177,7 +120,7 @@ def process_videos():
         reference_video_title = youtube_info['title'] if youtube_info else 'Unknown YouTube Video'
         reference_video_thumbnail = youtube_info['thumbnail'] if youtube_info else None
     elif reference_video_s3_key:
-        reference_video_url = f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/{reference_video_s3_key}"
+        reference_video_url = f"https://example.com/{reference_video_s3_key}"
         reference_video_title = os.path.basename(reference_video_s3_key)
         reference_video_thumbnail = None
     else:
