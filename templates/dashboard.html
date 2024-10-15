@@ -31,15 +31,20 @@
 
         <div class="card bg-secondary mb-4">
             <div class="card-body">
-                <h2 class="card-title">Fused Videos</h2>
-                <div class="row" id="video-list">
+                <h2 class="card-title mb-4">Fused Videos Gallery</h2>
+                <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4" id="video-gallery">
                     {% for video in videos %}
-                    <div class="col-md-4 mb-3">
-                        <div class="card">
+                    <div class="col">
+                        <div class="card h-100 bg-dark">
                             <img src="{{ video.reference_video_thumbnail }}" class="card-img-top" alt="Video thumbnail">
                             <div class="card-body">
                                 <h5 class="card-title">{{ video.reference_video_title }}</h5>
-                                <a href="{{ video.personal_video_url }}" class="btn btn-primary" target="_blank">View Fused Video</a>
+                                <p class="card-text">
+                                    <small class="text-muted">Reference: {{ video.reference_video_url }}</small>
+                                </p>
+                            </div>
+                            <div class="card-footer">
+                                <a href="{{ video.personal_video_url }}" class="btn btn-primary w-100" target="_blank">View Fused Video</a>
                             </div>
                         </div>
                     </div>
