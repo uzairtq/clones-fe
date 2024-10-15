@@ -37,8 +37,9 @@ def get_youtube_video_info(url):
         title = video_info["snippet"]["title"]
         duration_iso = video_info["contentDetails"]["duration"]
         duration = isodate.parse_duration(duration_iso)
-        minutes, seconds = divmod(duration.total_seconds(), 60)
-        formatted_duration = f"{int(minutes)}:{int(seconds):02d}"
+        total_seconds = duration.total_seconds()
+        minutes, seconds = divmod(total_seconds, 60)
+        formatted_duration = f'{int(minutes)}:{int(seconds):02d}'
         thumbnail = video_info["snippet"]["thumbnails"]["default"]["url"]
 
         return {
