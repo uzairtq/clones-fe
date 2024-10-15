@@ -172,7 +172,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: formData
                 });
 
-                const data = await response.json();
+                let data;
+                try {
+                    data = await response.json();
+                } catch (parseError) {
+                    console.error('Error parsing JSON response:', parseError);
+                    const responseText = await response.text();
+                    console.error('Raw response:', responseText);
+                    throw new Error('Invalid response from server. Please try again later.');
+                }
 
                 if (data.status === 'success') {
                     fusedVideo.src = data.fused_video_url;

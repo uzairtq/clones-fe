@@ -19,7 +19,7 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['SECRET_KEY'] = os.urandom(24)  # Add a secret key for session management
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 db.init_app(app)
@@ -132,21 +132,31 @@ def get_upload_url():
 @login_required
 def process_videos():
     try:
+        logger.debug("Received request to process videos")
         personal_video_s3_key = request.form.get('personal_video_s3_key')
         youtube_url = request.form.get('youtube_url')
 
+        logger.debug(f"Personal video S3 key: {personal_video_s3_key}")
+        logger.debug(f"YouTube URL: {youtube_url}")
+
         if not personal_video_s3_key:
+            logger.error("Personal video S3 key is missing")
             return jsonify({'status': 'error', 'message': 'Personal video S3 key is required'}), 400
 
         if not youtube_url:
+            logger.error("YouTube URL is missing")
             return jsonify({'status': 'error', 'message': 'YouTube URL is required'}), 400
 
         personal_video_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{personal_video_s3_key}"
+        logger.debug(f"Personal video URL: {personal_video_url}")
 
         # Process reference video (YouTube)
         youtube_info = get_youtube_video_info(youtube_url)
         if not youtube_info:
+            logger.error("Failed to get YouTube video info")
             return jsonify({'status': 'error', 'message': 'Invalid YouTube URL'}), 400
+
+        logger.debug(f"YouTube video info: {youtube_info}")
 
         # Save video information to database
         new_video = Video(
@@ -158,11 +168,13 @@ def process_videos():
         )
         db.session.add(new_video)
         db.session.commit()
+        logger.debug("Video information saved to database")
 
         # TODO: Implement actual video fusion logic
         # For now, we'll just return the personal video URL as the fused video
         fused_video_url = personal_video_url
 
+        logger.debug("Video processing completed successfully")
         return jsonify({
             'status': 'success',
             'message': 'Video processing completed successfully.',
