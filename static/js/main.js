@@ -99,9 +99,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (file) {
             const videoElement = document.createElement('video');
             videoElement.preload = 'metadata';
-            videoElement.onloadedmetadata = async () => {
-                const duration = videoElement.duration;
+
+            const updateInfo = async () => {
                 try {
+                    const duration = videoElement.duration;
+                    if (isNaN(duration) || duration === Infinity) {
+                        throw new Error('Invalid duration');
+                    }
                     const thumbnailDataUrl = await generateThumbnail(file);
                     personalVideoInfo.innerHTML = `
                         <h5>Personal Video</h5>
@@ -110,16 +114,37 @@ document.addEventListener('DOMContentLoaded', () => {
                         <img src="${thumbnailDataUrl}" alt="Personal Video Thumbnail" class="img-fluid mt-2 personal-thumbnail">
                     `;
                 } catch (error) {
-                    console.error('Error generating thumbnail:', error);
+                    console.error('Error processing video:', error);
                     personalVideoInfo.innerHTML = `
                         <h5>Personal Video</h5>
                         <p>Filename: ${file.name}</p>
-                        <p>Duration: ${formatDuration(duration)}</p>
-                        <p class="text-danger">Error generating thumbnail</p>
+                        <p class="text-danger">Error processing video: ${error.message}</p>
                     `;
                 }
             };
+
+            videoElement.onloadedmetadata = updateInfo;
+            videoElement.onerror = () => {
+                console.error('Error loading video metadata');
+                personalVideoInfo.innerHTML = `
+                    <h5>Personal Video</h5>
+                    <p>Filename: ${file.name}</p>
+                    <p class="text-danger">Error loading video metadata</p>
+                `;
+            };
+
             videoElement.src = URL.createObjectURL(file);
+
+            // Set a timeout in case the metadata doesn't load
+            setTimeout(() => {
+                if (personalVideoInfo.innerHTML === '') {
+                    personalVideoInfo.innerHTML = `
+                        <h5>Personal Video</h5>
+                        <p>Filename: ${file.name}</p>
+                        <p class="text-warning">Unable to determine video duration</p>
+                    `;
+                }
+            }, 5000);
         } else {
             personalVideoInfo.innerHTML = '';
         }
@@ -276,9 +301,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatDuration(seconds) {
-        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
         const remainingSeconds = Math.floor(seconds % 60);
-        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        
+        if (hours > 0) {
+            return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+        } else {
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
     }
 
     function showErrorMessage(message) {
