@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             videoPreview.srcObject = stream;
+            videoPreview.play();
             videoPreview.classList.remove('d-none');
 
             mediaRecorder = new MediaRecorder(stream);
@@ -67,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
             mediaRecorder.stop();
             stream.getTracks().forEach(track => track.stop());
             videoPreview.srcObject = null;
+            videoPreview.classList.add('d-none');
             recordVideoButton.classList.remove('d-none');
             stopRecordingButton.classList.add('d-none');
             recordedChunks = [];
@@ -94,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const video = document.createElement('video');
             video.preload = 'metadata';
             video.onloadedmetadata = () => {
-                video.currentTime = 1; // Seek to 1 second
+                video.currentTime = 1;
             };
             video.onseeked = () => {
                 const canvas = document.createElement('canvas');
@@ -386,7 +388,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     errorMessage += ' The server is under high load.';
                 }
             } catch (e) {
-                // If parsing fails, we'll use the default error message
             }
 
             serverStatus.innerHTML = `
