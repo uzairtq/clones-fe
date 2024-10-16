@@ -233,9 +233,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetchWithRetry(uploadUrl, {
                 method: 'PUT',
                 body: file,
-                // headers: {
-                //     'Content-Type': file.type,
-                // },
+                headers: {
+                    'Content-Type': file.type,
+                },
             });
             if (!response.ok) {
                 throw new Error(`Failed to upload file to S3: ${response.statusText}`);
@@ -267,8 +267,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const thumbnailDataUrl = await generateThumbnail(personalVideo);
                 
                 const personalVideoUploadData = await getUploadUrl(personalVideo);
-                console.log('File Name:', personalVideoUploadData.filename);
-                console.log('S3Key:', personalVideoUploadData.s3Key);
                 console.log('Upload URL:', personalVideoUploadData.uploadUrl);
                 await uploadFileToS3(personalVideo, personalVideoUploadData.uploadUrl);
                 formData.append('personal_video_s3_key', personalVideoUploadData.s3Key);
