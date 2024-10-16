@@ -177,9 +177,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchYouTubeInfo(url) {
         try {
             const response = await fetchWithRetry(`/get_youtube_info?url=${encodeURIComponent(url)}`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
             const data = await response.json();
             if (data.error) {
                 throw new Error(data.error);
@@ -231,42 +228,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function uploadFileToS3(file, uploadData) {
-        const { url, fields } = uploadData;
-        const formData = new FormData();
-
-        Object.keys(fields).forEach(key => {
-            formData.append(key, fields[key]);
-        });
-
-        formData.append('file', file);
-
+    async function uploadFileToS3(file, uploadUrl) {
         try {
-            const response = await fetchWithRetry(url, {
-                method: 'POST',
-                body: formData,
+            const response = await fetchWithRetry(uploadUrl, {
+                method: 'PUT',
+                body: file,
+                headers: {
+                    'Content-Type': file.type,
+                },
             });
-
             if (!response.ok) {
-                throw new Error(`Failed to upload file: ${response.statusText}`);
+                throw new Error(`Failed to upload file to S3: ${response.statusText}`);
             }
-
-            const uploadedBytes = file.size;
-            const progress = Math.round((uploadedBytes / file.size) * 100);
-            updateUploadProgress(progress);
-
-            return response;
         } catch (error) {
-            console.error('Error uploading file:', error);
             throw new Error(`Error uploading file: ${error.message}. Please try again or contact support if the problem persists.`);
-        }
-    }
-
-    function updateUploadProgress(progress) {
-        const progressBar = document.getElementById('upload-progress');
-        if (progressBar) {
-            progressBar.style.width = `${progress}%`;
-            progressBar.textContent = `${progress}%`;
         }
     }
 
@@ -278,11 +253,6 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 uploadButton.disabled = true;
                 uploadButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading...';
-
-                const progressContainer = document.createElement('div');
-                progressContainer.className = 'progress mt-2';
-                progressContainer.innerHTML = '<div id="upload-progress" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>';
-                uploadButton.parentNode.insertBefore(progressContainer, uploadButton.nextSibling);
 
                 const personalVideo = personalVideoInput.files[0];
                 if (!personalVideo) {
@@ -298,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const personalVideoUploadData = await getUploadUrl(personalVideo);
                 console.log('Upload URL:', personalVideoUploadData.uploadUrl);
-                await uploadFileToS3(personalVideo, personalVideoUploadData);
+                await uploadFileToS3(personalVideo, personalVideoUploadData.uploadUrl);
                 formData.append('personal_video_s3_key', personalVideoUploadData.s3Key);
                 formData.append('personal_video_thumbnail', thumbnailDataUrl);
 
@@ -308,10 +278,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     method: 'POST',
                     body: formData
                 });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
 
                 const data = await response.json();
 
@@ -337,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         `;
                     }
                 } else {
-                    throw new Error(data.message || 'Unknown error occurred');
+                    showErrorMessage(`Error uploading video: ${data.message}`);
                 }
             } catch (error) {
                 console.error('Error uploading video:', error);
@@ -345,10 +311,6 @@ document.addEventListener('DOMContentLoaded', () => {
             } finally {
                 uploadButton.disabled = false;
                 uploadButton.innerHTML = 'Upload Video';
-                const progressContainer = document.querySelector('.progress');
-                if (progressContainer) {
-                    progressContainer.remove();
-                }
             }
         });
     }
@@ -430,7 +392,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     errorMessage += ' The server is under high load.';
                 }
             } catch (e) {
-                errorMessage += ` Error details: ${error.message}`;
             }
 
             serverStatus.innerHTML = `
