@@ -229,19 +229,49 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function uploadFileToS3(file, uploadUrl) {
+        const chunkSize = 5 * 1024 * 1024; // 5MB chunks
+        const fileSize = file.size;
+        let start = 0;
+        let end = Math.min(chunkSize, fileSize);
+        let partNumber = 1;
+        let uploadedBytes = 0;
+
         try {
-            const response = await fetchWithRetry(uploadUrl, {
-                method: 'PUT',
-                body: file,
-                headers: {
-                    'Content-Type': file.type,
-                },
-            });
-            if (!response.ok) {
-                throw new Error(`Failed to upload file to S3: ${response.statusText}`);
+            while (start < fileSize) {
+                const chunk = file.slice(start, end);
+                const response = await fetchWithRetry(uploadUrl, {
+                    method: 'PUT',
+                    body: chunk,
+                    headers: {
+                        'Content-Type': file.type,
+                        'Content-Range': `bytes ${start}-${end - 1}/${fileSize}`,
+                        'x-amz-part-number': partNumber.toString(),
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to upload chunk ${partNumber}: ${response.statusText}`);
+                }
+
+                uploadedBytes += chunk.size;
+                const progress = Math.round((uploadedBytes / fileSize) * 100);
+                updateUploadProgress(progress);
+
+                start = end;
+                end = Math.min(start + chunkSize, fileSize);
+                partNumber++;
             }
         } catch (error) {
+            console.error('Error uploading file:', error);
             throw new Error(`Error uploading file: ${error.message}. Please try again or contact support if the problem persists.`);
+        }
+    }
+
+    function updateUploadProgress(progress) {
+        const progressBar = document.getElementById('upload-progress');
+        if (progressBar) {
+            progressBar.style.width = `${progress}%`;
+            progressBar.textContent = `${progress}%`;
         }
     }
 
@@ -253,6 +283,12 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 uploadButton.disabled = true;
                 uploadButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading...';
+
+                // Add progress bar
+                const progressContainer = document.createElement('div');
+                progressContainer.className = 'progress mt-2';
+                progressContainer.innerHTML = '<div id="upload-progress" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>';
+                uploadButton.parentNode.insertBefore(progressContainer, uploadButton.nextSibling);
 
                 const personalVideo = personalVideoInput.files[0];
                 if (!personalVideo) {
@@ -311,6 +347,10 @@ document.addEventListener('DOMContentLoaded', () => {
             } finally {
                 uploadButton.disabled = false;
                 uploadButton.innerHTML = 'Upload Video';
+                const progressContainer = document.querySelector('.progress');
+                if (progressContainer) {
+                    progressContainer.remove();
+                }
             }
         });
     }
