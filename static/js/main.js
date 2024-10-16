@@ -177,6 +177,9 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchYouTubeInfo(url) {
         try {
             const response = await fetchWithRetry(`/get_youtube_info?url=${encodeURIComponent(url)}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             const data = await response.json();
             if (data.error) {
                 throw new Error(data.error);
@@ -306,6 +309,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: formData
                 });
 
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 const data = await response.json();
 
                 if (data.status === 'success') {
@@ -330,7 +337,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         `;
                     }
                 } else {
-                    showErrorMessage(`Error uploading video: ${data.message}`);
+                    throw new Error(data.message || 'Unknown error occurred');
                 }
             } catch (error) {
                 console.error('Error uploading video:', error);
@@ -423,6 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     errorMessage += ' The server is under high load.';
                 }
             } catch (e) {
+                errorMessage += ` Error details: ${error.message}`;
             }
 
             serverStatus.innerHTML = `
