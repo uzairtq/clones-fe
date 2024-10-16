@@ -3,6 +3,7 @@ import logging
 from urllib.parse import urlparse, parse_qs
 import googleapiclient.discovery
 import isodate
+from googleapiclient.errors import HttpError
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -26,9 +27,14 @@ def get_youtube_video_info(url):
         logger.error(f"Invalid YouTube URL: {url}")
         return None
 
-    youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=os.environ.get("YOUTUBE_API_KEY"))
+    youtube_api_key = os.environ.get("YOUTUBE_API_KEY")
+    if not youtube_api_key:
+        logger.error("YouTube API key is missing")
+        return None
 
     try:
+        youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=youtube_api_key)
+
         request = youtube.videos().list(
             part="snippet,contentDetails",
             id=video_id
@@ -70,6 +76,9 @@ def get_youtube_video_info(url):
             'duration': formatted_duration,
             'thumbnail': thumbnail
         }
+    except HttpError as e:
+        logger.error(f"YouTube API HTTP error: {e.resp.status} {e.content}")
+        return None
     except Exception as e:
         logger.error(f"Error fetching YouTube video info: {str(e)}")
         return None
