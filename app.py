@@ -1,31 +1,40 @@
 import os
 import logging
-from flask import Flask, render_template, request, jsonify
-from botocore.exceptions import ClientError
-import boto3
-from utils.youtube_api import get_youtube_video_info
 import traceback
-import psutil
-import isodate
-import base64
 import io
+import base64
+from flask import Flask, render_template, request, jsonify
+import boto3
+from botocore.exceptions import ClientError
+import psutil
+from utils.youtube_api import get_youtube_video_info
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB limit
 
 logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+logger = app.logger
 
 S3_BUCKET = os.environ.get('S3_BUCKET')
+
 s3_client = None
 
 def initialize_s3_client():
     try:
+        aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
+        aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+        
+        logger.info(f"AWS Access Key ID: {aws_access_key_id[:4]}{'*' * (len(aws_access_key_id) - 4) if aws_access_key_id else 'Not set'}")
+        
+        if not aws_access_key_id or not aws_secret_access_key:
+            logger.error("AWS credentials are not set in environment variables")
+            return None
+
         return boto3.client(
             's3',
-            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
             region_name='us-east-1'
         )
     except Exception as e:
@@ -57,7 +66,6 @@ def upload_thumbnail_to_s3(thumbnail_data, video_key):
         return None
 
     try:
-        # Remove the "data:image/jpeg;base64," prefix
         thumbnail_data = thumbnail_data.split(',')[1]
         thumbnail_bytes = base64.b64decode(thumbnail_data)
         thumbnail_buffer = io.BytesIO(thumbnail_bytes)
@@ -115,7 +123,6 @@ def process_videos():
             logger.error("Personal video thumbnail is missing")
             return jsonify({'status': 'error', 'message': 'Personal video thumbnail is required'}), 400
 
-        # Validate S3 key
         if not s3_client:
             logger.error("S3 client is not initialized. Cannot validate S3 object.")
             return jsonify({'status': 'error', 'message': 'S3 connection error. Please try again later.'}), 500
@@ -129,13 +136,11 @@ def process_videos():
         personal_video_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{personal_video_s3_key}"
         logger.debug(f"Personal video URL: {personal_video_url}")
 
-        # Upload thumbnail to S3
         thumbnail_url = upload_thumbnail_to_s3(personal_video_thumbnail, personal_video_s3_key)
         if not thumbnail_url:
             logger.error("Failed to upload thumbnail to S3")
             return jsonify({'status': 'error', 'message': 'Failed to upload thumbnail'}), 500
 
-        # Process reference video (YouTube)
         youtube_info = get_youtube_video_info(youtube_url)
         if not youtube_info:
             logger.error("Failed to get YouTube video info")
@@ -143,7 +148,6 @@ def process_videos():
 
         logger.debug(f"YouTube video info: {youtube_info}")
 
-        # For now, we'll just return the personal video URL
         uploaded_video_url = personal_video_url
 
         logger.debug("Video processing completed successfully")
@@ -182,7 +186,6 @@ def health_check():
         'disk_usage': psutil.disk_usage('/').percent
     }
 
-    # Check S3 connection
     global s3_client
     if not s3_client:
         s3_client = initialize_s3_client()
@@ -201,7 +204,7 @@ def health_check():
             health_status['s3_status'] = 'ERROR'
             health_status['status'] = 'unhealthy'
             health_status['s3_error'] = str(e)
-            s3_client = None  # Reset the client to force reinitialization on next request
+            s3_client = None
 
     logger.info(f"Health check: {health_status}")
     return jsonify(health_status), 200 if health_status['status'] == 'healthy' else 500
