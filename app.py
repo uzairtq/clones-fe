@@ -1,78 +1,97 @@
-@app.route('/process_videos', methods=['POST'])
-def process_videos():
+from flask import Flask, request, jsonify
+import logging
+import os
+import uuid
+import boto3
+from botocore.exceptions import ClientError
+
+app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500 MB limit
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+S3_BUCKET = os.environ.get('S3_BUCKET')
+AWS_ACCESS_KEY = os.environ.get('AWS_ACCESS_KEY_ID')
+AWS_SECRET_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+
+s3_client = None
+
+def initialize_s3_client():
+    global s3_client
     try:
-        logger.debug("Received request to process videos")
-        personal_video_s3_key = request.form.get('personal_video_s3_key')
-        youtube_url = request.form.get('youtube_url')
-        personal_video_thumbnail = request.form.get('personal_video_thumbnail')
-
-        logger.debug(f"Personal video S3 key: {personal_video_s3_key}")
-        logger.debug(f"YouTube URL: {youtube_url}")
-
-        if not personal_video_s3_key:
-            logger.error("Personal video S3 key is missing")
-            return jsonify({'status': 'error', 'message': 'Personal video S3 key is required'}), 400
-
-        if not youtube_url:
-            logger.error("YouTube URL is missing")
-            return jsonify({'status': 'error', 'message': 'YouTube URL is required'}), 400
-
-        if not personal_video_thumbnail:
-            logger.error("Personal video thumbnail is missing")
-            return jsonify({'status': 'error', 'message': 'Personal video thumbnail is required'}), 400
-
-        global s3_client
-        if not s3_client:
-            logger.error("S3 client is not initialized. Attempting to reinitialize.")
-            s3_client = initialize_s3_client()
-            if not s3_client:
-                logger.error("Failed to reinitialize S3 client.")
-                return jsonify({'status': 'error', 'message': 'S3 connection error. Please try again later.'}), 500
-
-        try:
-            # Check if the multipart upload is complete
-            s3_client.head_object(Bucket=S3_BUCKET, Key=personal_video_s3_key)
-        except ClientError as e:
-            if e.response['Error']['Code'] == '404':
-                logger.error(f"Error validating S3 object: File not found. Key: {personal_video_s3_key}")
-                return jsonify({'status': 'error', 'message': 'Video upload incomplete or failed. Please try uploading again.'}), 400
-            else:
-                logger.error(f"Error validating S3 object: {str(e)}")
-                return jsonify({'status': 'error', 'message': 'Error validating uploaded video. Please try again.'}), 500
-
-        personal_video_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{personal_video_s3_key}"
-        logger.debug(f"Personal video URL: {personal_video_url}")
-
-        try:
-            thumbnail_url = upload_thumbnail_to_s3(personal_video_thumbnail, personal_video_s3_key)
-            if not thumbnail_url:
-                raise Exception("Failed to upload thumbnail to S3")
-        except Exception as thumb_error:
-            logger.error(f"Failed to upload thumbnail to S3: {str(thumb_error)}")
-            return jsonify({'status': 'error', 'message': 'Failed to upload thumbnail'}), 500
-
-        try:
-            youtube_info = get_youtube_video_info(youtube_url)
-            if not youtube_info:
-                raise Exception("Failed to get YouTube video info")
-        except Exception as yt_error:
-            logger.error(f"Failed to get YouTube video info: {str(yt_error)}")
-            return jsonify({'status': 'error', 'message': 'Invalid YouTube URL or unable to fetch video information'}), 400
-
-        logger.debug(f"YouTube video info: {youtube_info}")
-
-        uploaded_video_url = personal_video_url
-
-        logger.debug("Video processing completed successfully")
-        return jsonify({
-            'status': 'success',
-            'message': 'Video uploaded successfully.',
-            'uploaded_video_url': uploaded_video_url,
-            'personal_video_thumbnail': thumbnail_url,
-            'youtube_info': youtube_info
-        })
-
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=AWS_ACCESS_KEY,
+            aws_secret_access_key=AWS_SECRET_KEY
+        )
+        # Test the connection by listing buckets
+        s3_client.list_buckets()
+        logger.info("S3 client initialized successfully")
+        return s3_client
     except Exception as e:
-        logger.error(f"Error processing videos: {str(e)}")
-        logger.error(traceback.format_exc())
-        return jsonify({'status': 'error', 'message': f'An error occurred: {str(e)}. Please try again later.'}), 500
+        logger.error(f"Failed to initialize S3 client: {str(e)}")
+        return None
+
+s3_client = initialize_s3_client()
+
+def generate_presigned_url(file_name, file_type):
+    if not s3_client:
+        logger.error("S3 client is not initialized")
+        return None, None
+
+    try:
+        s3_key = f"user-uploads/{file_name}-{uuid.uuid4().hex}"
+        
+        response = s3_client.generate_presigned_post(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Fields={"Content-Type": file_type},
+            Conditions=[
+                {"Content-Type": file_type}
+            ],
+            ExpiresIn=3600
+        )
+        
+        logger.info(f"Generated presigned URL for multipart upload: {response['url']}")
+        return response, s3_key
+    except ClientError as e:
+        logger.error(f"Error generating presigned URL: {e}")
+        if e.response['Error']['Code'] == 'NoSuchBucket':
+            logger.error(f"Bucket '{S3_BUCKET}' does not exist")
+        elif e.response['Error']['Code'] == 'AccessDenied':
+            logger.error("Access denied. Check your AWS credentials and bucket permissions")
+        return None, None
+    except Exception as e:
+        logger.error(f"Unexpected error generating presigned URL: {str(e)}")
+        return None, None
+
+@app.route('/get-upload-url', methods=['POST'])
+def get_upload_url():
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No JSON data received'}), 400
+
+        file_name = data.get('fileName')
+        file_type = data.get('fileType')
+
+        if not file_name or not file_type:
+            return jsonify({'error': 'fileName and fileType are required'}), 400
+
+        presigned_data, s3_key = generate_presigned_url(file_name, file_type)
+        
+        if presigned_data and s3_key:
+            return jsonify({
+                'uploadUrl': presigned_data['url'],
+                'fields': presigned_data['fields'],
+                's3Key': s3_key
+            })
+        else:
+            return jsonify({'error': 'Failed to generate upload URL'}), 500
+    except Exception as e:
+        logger.error(f"Error in get_upload_url: {str(e)}")
+        return jsonify({'error': 'An unexpected error occurred'}), 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)

@@ -38,6 +38,7 @@ def test_s3_upload():
             try:
                 data = json.loads(response.data)
                 upload_url = data['uploadUrl']
+                fields = data['fields']
                 s3_key = data['s3Key']
                 logger.info(f"Received upload URL: {upload_url}")
                 logger.info(f"Received S3 key: {s3_key}")
@@ -50,15 +51,16 @@ def test_s3_upload():
             logger.info(f"Simulating file upload to: {upload_url}")
 
             with open(test_file, 'rb') as f:
+                files = {'file': (test_file, f)}
                 try:
-                    upload_response = requests.put(upload_url, data=f.read(), headers={'Content-Type': 'text/plain'})
+                    upload_response = requests.post(upload_url, data=fields, files=files)
                     logger.info(f"Upload response status code: {upload_response.status_code}")
                     logger.info(f"Upload response content: {upload_response.text}")
                 except requests.RequestException as e:
                     logger.error(f"Error during file upload: {e}")
                     return
 
-            if upload_response.status_code == 200:
+            if upload_response.status_code == 204:
                 logger.info("File uploaded successfully")
             else:
                 logger.error(f"Failed to upload file. Status code: {upload_response.status_code}")

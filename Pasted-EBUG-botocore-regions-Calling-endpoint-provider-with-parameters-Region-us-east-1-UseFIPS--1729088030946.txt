@@ -1,0 +1,44 @@
+EBUG:botocore.regions:Calling endpoint provider with parameters: {'Region': 'us-east-1', 'UseFIPS': False, 'UseDualStack': False, 'ForcePathStyle': False, 'Accelerate': False, 'UseGlobalEndpoint': True, 'DisableMultiRegionAccessPoints': False, 'UseArnRegion': True}
+DEBUG:botocore.regions:Endpoint provider result: https://s3.amazonaws.com
+DEBUG:botocore.regions:Selecting from endpoint provider's list of auth schemes: "sigv4". User selected auth scheme is: "None"
+DEBUG:botocore.regions:Selected auth type "v4" as "v4" with signing context params: {'region': 'us-east-1', 'signing_name': 's3', 'disableDoubleEncoding': True}
+DEBUG:botocore.hooks:Event before-call.s3.ListBuckets: calling handler <function add_expect_header at 0x7faca7e2b6a0>
+DEBUG:botocore.hooks:Event before-call.s3.ListBuckets: calling handler <bound method S3ExpressIdentityResolver.apply_signing_cache_key of <botocore.utils.S3ExpressIdentityResolver object at 0x7faca75f8a90>>
+DEBUG:botocore.hooks:Event before-call.s3.ListBuckets: calling handler <function add_recursion_detection_header at 0x7faca7e29940>
+DEBUG:botocore.hooks:Event before-call.s3.ListBuckets: calling handler <function inject_api_version_header_if_needed at 0x7faca7e48c20>
+DEBUG:botocore.endpoint:Making request for OperationModel(name=ListBuckets) with params: {'url_path': '/', 'query_string': {}, 'method': 'GET', 'headers': {'User-Agent': 'Boto3/1.35.40 md/Botocore#1.35.40 ua/2.0 os/linux#6.2.16 md/arch#x86_64 lang/python#3.11.9 md/pyimpl#CPython cfg/retry-mode#legacy Botocore/1.35.40'}, 'body': b'', 'url': 'https://s3.amazonaws.com/', 'context': {'client_region': 'us-east-1', 'client_config': <botocore.config.Config object at 0x7faca6be0590>, 'has_streaming_input': False, 'auth_type': 'v4', 'unsigned_payload': None, 's3_redirect': {'redirected': False, 'bucket': None, 'params': {}}, 'input_params': {}, 'signing': {'region': 'us-east-1', 'signing_name': 's3', 'disableDoubleEncoding': True}, 'endpoint_properties': {'authSchemes': [{'disableDoubleEncoding': True, 'name': 'sigv4', 'signingName': 's3', 'signingRegion': 'us-east-1'}]}}}
+DEBUG:botocore.hooks:Event request-created.s3.ListBuckets: calling handler <bound method RequestSigner.handler of <botocore.signers.RequestSigner object at 0x7faca6b274d0>>
+DEBUG:botocore.hooks:Event choose-signer.s3.ListBuckets: calling handler <bound method ClientCreator._default_s3_presign_to_sigv2 of <botocore.client.ClientCreator object at 0x7faca7784610>>
+DEBUG:botocore.hooks:Event choose-signer.s3.ListBuckets: calling handler <function set_operation_specific_signer at 0x7faca7e2af20>
+DEBUG:botocore.hooks:Event before-sign.s3.ListBuckets: calling handler <function remove_arn_from_signing_path at 0x7faca7e49620>
+DEBUG:botocore.hooks:Event before-sign.s3.ListBuckets: calling handler <bound method S3ExpressIdentityResolver.resolve_s3express_identity of <botocore.utils.S3ExpressIdentityResolver object at 0x7faca75f8a90>>
+DEBUG:botocore.auth:Calculating signature using v4 auth.
+DEBUG:botocore.auth:CanonicalRequest:
+GET
+/
+
+host:s3.amazonaws.com
+x-amz-content-sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+x-amz-date:20241016T140735Z
+
+host;x-amz-content-sha256;x-amz-date
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+DEBUG:botocore.auth:StringToSign:
+AWS4-HMAC-SHA256
+20241016T140735Z
+20241016/us-east-1/s3/aws4_request
+3ae561eb6eaef68839752db2869d07feb0dc46a2c032682f77aec2bae1371c00
+DEBUG:botocore.auth:Signature:
+aacdb250f4796c2a2dde1fadcc0e434724468587e86e0e156d1c165683d16876
+DEBUG:botocore.hooks:Event request-created.s3.ListBuckets: calling handler <function add_retry_headers at 0x7faca7e49440>
+DEBUG:botocore.endpoint:Sending http request: <AWSPreparedRequest stream_output=False, method=GET, url=https://s3.amazonaws.com/, headers={'User-Agent': b'Boto3/1.35.40 md/Botocore#1.35.40 ua/2.0 os/linux#6.2.16 md/arch#x86_64 lang/python#3.11.9 md/pyimpl#CPython cfg/retry-mode#legacy Botocore/1.35.40', 'X-Amz-Date': b'20241016T140735Z', 'X-Amz-Content-SHA256': b'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', 'Authorization': b'AWS4-HMAC-SHA256 Credential=AKIAQE43KLS4BOUOXYV5/20241016/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=aacdb250f4796c2a2dde1fadcc0e434724468587e86e0e156d1c165683d16876', 'amz-sdk-invocation-id': b'86879ffb-016a-4f4c-8bb0-711c93983a5c', 'amz-sdk-request': b'attempt=1'}>
+DEBUG:urllib3.connectionpool:Resetting dropped connection: s3.amazonaws.com
+DEBUG:urllib3.connectionpool:https://s3.amazonaws.com:443 "GET / HTTP/11" 200 None
+DEBUG:botocore.hooks:Event before-parse.s3.ListBuckets: calling handler <function handle_expires_header at 0x7faca7e49800>
+DEBUG:botocore.parsers:Response headers: {'x-amz-id-2': 'G1SOjKtcbiGA5FK+ifc97swOBzRCXqBX2AWTU/bI6pJsdThvyEAjgOjGyAFAMRy/5x8otnYVJUU=', 'x-amz-request-id': '6QAW3AFH1AV6CQV5', 'Date': 'Wed, 16 Oct 2024 14:07:36 GMT', 'Content-Type': 'application/xml', 'Transfer-Encoding': 'chunked', 'Server': 'AmazonS3'}
+DEBUG:botocore.parsers:Response body:
+b'<?xml version="1.0" encoding="UTF-8"?>\n<ListAllMyBucketsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Owner><ID>30216bf6aee200f50f000927427a7c50612788ff6312ebe1b380351c95cfab74</ID><DisplayName>usama</DisplayName></Owner><Buckets><Bucket><Name>clones-main</Name><CreationDate>2024-10-14T20:46:49.000Z</CreationDate></Bucket><Bucket><Name>reap-landing-page</Name><CreationDate>2024-10-15T08:15:45.000Z</CreationDate></Bucket><Bucket><Name>reap-main-v1</Name><CreationDate>2024-08-21T12:09:58.000Z</CreationDate></Bucket><Bucket><Name>reap-public-data</Name><CreationDate>2024-08-29T11:16:44.000Z</CreationDate></Bucket><Bucket><Name>reap-testing-main</Name><CreationDate>2024-08-14T10:14:35.000Z</CreationDate></Bucket><Bucket><Name>reap-video-main-bkt-prod</Name><CreationDate>2024-09-05T22:26:21.000Z</CreationDate></Bucket><Bucket><Name>reap-video-main-bkt-stage</Name><CreationDate>2024-09-05T21:30:00.000Z</CreationDate></Bucket><Bucket><Name>remotionlambda-useast1-4p5l7ppfb8</Name><CreationDate>2024-08-20T08:17:15.000Z</CreationDate></Bucket><Bucket><Name>sagemaker-us-east-1-010526284984</Name><CreationDate>2024-08-14T10:41:36.000Z</CreationDate></Bucket></Buckets></ListAllMyBucketsResult>'
+DEBUG:botocore.hooks:Event needs-retry.s3.ListBuckets: calling handler <botocore.retryhandler.RetryHandler object at 0x7faca7773a10>
+DEBUG:botocore.retryhandler:No retry needed.
+DEBUG:botocore.hooks:Event needs-retry.s3.ListBuckets: calling handler <bound method S3RegionRedirectorv2.redirect_from_error of <botocore.utils.S3RegionRedirectorv2 object at 0x7faca7773e50>>
+INFO:app:Health check: {'status': 'healthy', 's3_status': 'OK', 'cpu_usage': 18.4, 'memory_usage': 89.4, 'disk_usage': 27.3}

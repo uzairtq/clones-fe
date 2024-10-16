@@ -228,39 +228,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function uploadFileToS3(file, uploadUrl) {
-        const chunkSize = 5 * 1024 * 1024; // 5MB chunks
-        const fileSize = file.size;
-        let start = 0;
-        let end = Math.min(chunkSize, fileSize);
-        let partNumber = 1;
-        let uploadedBytes = 0;
+    async function uploadFileToS3(file, uploadData) {
+        const { url, fields } = uploadData;
+        const formData = new FormData();
+
+        Object.keys(fields).forEach(key => {
+            formData.append(key, fields[key]);
+        });
+
+        formData.append('file', file);
 
         try {
-            while (start < fileSize) {
-                const chunk = file.slice(start, end);
-                const response = await fetchWithRetry(uploadUrl, {
-                    method: 'PUT',
-                    body: chunk,
-                    headers: {
-                        'Content-Type': file.type,
-                        'Content-Range': `bytes ${start}-${end - 1}/${fileSize}`,
-                        'x-amz-part-number': partNumber.toString(),
-                    },
-                });
+            const response = await fetchWithRetry(url, {
+                method: 'POST',
+                body: formData,
+            });
 
-                if (!response.ok) {
-                    throw new Error(`Failed to upload chunk ${partNumber}: ${response.statusText}`);
-                }
-
-                uploadedBytes += chunk.size;
-                const progress = Math.round((uploadedBytes / fileSize) * 100);
-                updateUploadProgress(progress);
-
-                start = end;
-                end = Math.min(start + chunkSize, fileSize);
-                partNumber++;
+            if (!response.ok) {
+                throw new Error(`Failed to upload file: ${response.statusText}`);
             }
+
+            const uploadedBytes = file.size;
+            const progress = Math.round((uploadedBytes / file.size) * 100);
+            updateUploadProgress(progress);
+
+            return response;
         } catch (error) {
             console.error('Error uploading file:', error);
             throw new Error(`Error uploading file: ${error.message}. Please try again or contact support if the problem persists.`);
@@ -284,7 +276,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 uploadButton.disabled = true;
                 uploadButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading...';
 
-                // Add progress bar
                 const progressContainer = document.createElement('div');
                 progressContainer.className = 'progress mt-2';
                 progressContainer.innerHTML = '<div id="upload-progress" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>';
@@ -304,7 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const personalVideoUploadData = await getUploadUrl(personalVideo);
                 console.log('Upload URL:', personalVideoUploadData.uploadUrl);
-                await uploadFileToS3(personalVideo, personalVideoUploadData.uploadUrl);
+                await uploadFileToS3(personalVideo, personalVideoUploadData);
                 formData.append('personal_video_s3_key', personalVideoUploadData.s3Key);
                 formData.append('personal_video_thumbnail', thumbnailDataUrl);
 
