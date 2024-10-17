@@ -252,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             try {
                 uploadButton.disabled = true;
-                uploadButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading...';
+                uploadButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Fusing...';
 
                 const personalVideo = personalVideoInput.files[0];
                 if (!personalVideo) {
@@ -303,14 +303,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         `;
                     }
                 } else {
-                    showErrorMessage(`Error uploading video: ${data.message}`);
+                    showErrorMessage(`Error fusing videos: ${data.message}`);
                 }
             } catch (error) {
-                console.error('Error uploading video:', error);
+                console.error('Error fusing videos:', error);
                 showErrorMessage(`An error occurred: ${error.message}. Please try again later or contact support if the problem persists.`);
             } finally {
                 uploadButton.disabled = false;
-                uploadButton.innerHTML = 'Upload Video';
+                uploadButton.innerHTML = 'Fuse Videos';
             }
         });
     }
