@@ -163,8 +163,17 @@ def process_videos_route():
         processed_video_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{processed_video_s3_key}"
 
         # Clean up temporary files
-        os.remove(personal_video_path)
-        os.remove(processed_video_path)
+        try:
+            os.remove(personal_video_path)
+            logger.info(f"Successfully deleted local personal video file: {personal_video_path}")
+        except Exception as e:
+            logger.error(f"Error deleting local personal video file: {str(e)}")
+
+        try:
+            os.remove(processed_video_path)
+            logger.info(f"Successfully deleted local processed video file: {processed_video_path}")
+        except Exception as e:
+            logger.error(f"Error deleting local processed video file: {str(e)}")
 
         # Clean up the original personal video from S3
         try:
