@@ -7,9 +7,12 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 def download_youtube_video(youtube_url, output_path):
+    # Remove the .mp3 extension if it's already present
+    output_path_without_ext = os.path.splitext(output_path)[0]
+    
     ydl_opts = {
         'format': 'bestaudio/best',
-        'outtmpl': output_path,
+        'outtmpl': output_path_without_ext,  # Use the path without extension
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -22,6 +25,15 @@ def download_youtube_video(youtube_url, output_path):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([youtube_url])
         logger.info(f"Successfully downloaded audio from YouTube: {youtube_url}")
+        
+        # Ensure the final file has the .mp3 extension
+        final_output_path = f"{output_path_without_ext}.mp3"
+        if os.path.exists(final_output_path):
+            logger.info(f"Audio file saved as: {final_output_path}")
+        else:
+            logger.error(f"Expected audio file not found: {final_output_path}")
+        
+        return final_output_path
     except Exception as e:
         logger.error(f"Error downloading YouTube audio: {str(e)}")
         raise
@@ -30,7 +42,7 @@ def process_videos(personal_video_path, youtube_url, output_path):
     try:
         # Download YouTube audio
         youtube_audio_path = os.path.join(os.path.dirname(output_path), 'youtube_audio.mp3')
-        download_youtube_video(youtube_url, youtube_audio_path)
+        youtube_audio_path = download_youtube_video(youtube_url, youtube_audio_path)
         
         logger.info(f"YouTube audio downloaded to: {youtube_audio_path}")
         
