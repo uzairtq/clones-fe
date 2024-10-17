@@ -11,9 +11,6 @@ import psutil
 import isodate
 import base64
 import io
-import subprocess
-import tempfile
-from pytube import YouTube
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -109,9 +106,17 @@ def process_videos():
         logger.debug(f"Personal video S3 key: {personal_video_s3_key}")
         logger.debug(f"YouTube URL: {youtube_url}")
 
-        if not personal_video_s3_key or not youtube_url or not personal_video_thumbnail:
-            logger.error("Missing required data")
-            return jsonify({'status': 'error', 'message': 'Personal video S3 key, YouTube URL, and personal video thumbnail are required'}), 400
+        if not personal_video_s3_key:
+            logger.error("Personal video S3 key is missing")
+            return jsonify({'status': 'error', 'message': 'Personal video S3 key is required'}), 400
+
+        if not youtube_url:
+            logger.error("YouTube URL is missing")
+            return jsonify({'status': 'error', 'message': 'YouTube URL is required'}), 400
+
+        if not personal_video_thumbnail:
+            logger.error("Personal video thumbnail is missing")
+            return jsonify({'status': 'error', 'message': 'Personal video thumbnail is required'}), 400
 
         # Validate S3 key
         if not s3_client:
@@ -124,48 +129,8 @@ def process_videos():
             logger.error(f"Error validating S3 object: {str(e)}")
             return jsonify({'status': 'error', 'message': 'Invalid or inaccessible personal video'}), 400
 
-        # Download personal video from S3
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_personal_video:
-            s3_client.download_fileobj(S3_BUCKET, personal_video_s3_key, temp_personal_video)
-            personal_video_path = temp_personal_video.name
-
-        # Download YouTube video
-        yt = YouTube(youtube_url)
-        stream = yt.streams.filter(progressive=True, file_extension='mp4').first()
-        youtube_video_path = tempfile.mktemp(suffix='.mp4')
-        stream.download(filename=youtube_video_path)
-
-        # Process videos using FFmpeg
-        output_video_path = tempfile.mktemp(suffix='.mp4')
-        ffmpeg_command = [
-            'ffmpeg',
-            '-i', personal_video_path,
-            '-i', youtube_video_path,
-            '-filter_complex', '[0:v][1:v]hstack=inputs=2[v];[0:a][1:a]amix=inputs=2[a]',
-            '-map', '[v]',
-            '-map', '[a]',
-            '-c:v', 'libx264',
-            '-crf', '23',
-            '-preset', 'veryfast',
-            output_video_path
-        ]
-
-        try:
-            subprocess.run(ffmpeg_command, check=True, capture_output=True)
-        except subprocess.CalledProcessError as e:
-            logger.error(f"FFmpeg error: {e.stderr.decode()}")
-            return jsonify({'status': 'error', 'message': 'Error processing videos'}), 500
-
-        # Upload processed video to S3
-        processed_video_key = f"processed-videos/{uuid.uuid4()}.mp4"
-        s3_client.upload_file(output_video_path, S3_BUCKET, processed_video_key)
-
-        # Generate URL for the processed video
-        processed_video_url = s3_client.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': S3_BUCKET, 'Key': processed_video_key},
-            ExpiresIn=3600
-        )
+        personal_video_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{personal_video_s3_key}"
+        logger.debug(f"Personal video URL: {personal_video_url}")
 
         # Upload thumbnail to S3
         thumbnail_url = upload_thumbnail_to_s3(personal_video_thumbnail, personal_video_s3_key)
@@ -173,24 +138,22 @@ def process_videos():
             logger.error("Failed to upload thumbnail to S3")
             return jsonify({'status': 'error', 'message': 'Failed to upload thumbnail'}), 500
 
-        # Get YouTube video info
+        # Process reference video (YouTube)
         youtube_info = get_youtube_video_info(youtube_url)
         if not youtube_info:
             logger.error("Failed to get YouTube video info")
             return jsonify({'status': 'error', 'message': 'Invalid YouTube URL'}), 400
 
         logger.debug(f"YouTube video info: {youtube_info}")
+
+        # For now, we'll just return the personal video URL
+        uploaded_video_url = personal_video_url
+
         logger.debug("Video processing completed successfully")
-
-        # Clean up temporary files
-        os.unlink(personal_video_path)
-        os.unlink(youtube_video_path)
-        os.unlink(output_video_path)
-
         return jsonify({
             'status': 'success',
-            'message': 'Videos processed and fused successfully.',
-            'processed_video_url': processed_video_url,
+            'message': 'Video uploaded successfully.',
+            'uploaded_video_url': uploaded_video_url,
             'personal_video_thumbnail': thumbnail_url,
             'youtube_info': youtube_info
         })

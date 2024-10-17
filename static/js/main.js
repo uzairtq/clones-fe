@@ -270,6 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('Upload URL:', personalVideoUploadData.uploadUrl);
                 await uploadFileToS3(personalVideo, personalVideoUploadData.uploadUrl);
                 
+                // Update: Pass S3 location and YouTube URL to backend
                 const requestBody = {
                     personal_video_s3_key: personalVideoUploadData.s3Key,
                     personal_video_thumbnail: thumbnailDataUrl,
@@ -287,7 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await response.json();
 
                 if (data.status === 'success') {
-                    uploadedVideo.src = data.processed_video_url;
+                    uploadedVideo.src = data.uploaded_video_url;
                     resultSection.classList.remove('d-none');
                     showSuccessMessage(data.message);
                     
