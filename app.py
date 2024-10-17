@@ -12,6 +12,7 @@ import psutil
 import isodate
 import base64
 import io
+import time
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -97,6 +98,7 @@ def get_upload_url():
 
 @app.route('/process_videos', methods=['POST'])
 def process_videos_route():
+    start_time = time.time()
     try:
         logger.debug("Received request to process videos")
         data = request.json
@@ -166,7 +168,8 @@ def process_videos_route():
         os.remove(personal_video_path)
         os.remove(processed_video_path)
 
-        logger.debug("Video processing completed successfully")
+        end_time = time.time()
+        logger.debug(f"Video processing completed successfully in {end_time - start_time:.2f} seconds")
         return jsonify({
             'status': 'success',
             'message': 'Video processed successfully.',
@@ -176,8 +179,10 @@ def process_videos_route():
         })
 
     except Exception as e:
+        end_time = time.time()
         logger.error(f"Error processing videos: {str(e)}")
         logger.error(traceback.format_exc())
+        logger.error(f"Video processing failed after {end_time - start_time:.2f} seconds")
         return jsonify({'status': 'error', 'message': f'An error occurred: {str(e)}. Please try again later.'}), 500
 
 @app.route('/get_youtube_info')

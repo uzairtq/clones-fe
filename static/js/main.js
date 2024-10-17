@@ -352,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchWithTimeout(url, options = {}) {
-        const timeout = 30000;
+        const timeout = 300000; // 5 minutes timeout
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), timeout);
 
@@ -365,6 +365,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return response;
         } catch (error) {
             clearTimeout(id);
+            if (error.name === 'AbortError') {
+                throw new Error('Request timed out. The video processing may take longer than expected. Please try again or use a shorter video.');
+            }
             throw error;
         }
     }
@@ -398,6 +401,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     errorMessage += ' The server is under high load.';
                 }
             } catch (e) {
+                // If parsing fails, use the original error message
+                errorMessage += ` Error details: ${error.message}`;
             }
 
             serverStatus.innerHTML = `
