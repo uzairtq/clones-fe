@@ -97,6 +97,8 @@ def get_upload_url():
 
 @app.route('/process_videos', methods=['POST'])
 def process_videos_route():
+    personal_video_path = None
+    processed_video_path = None
     try:
         logger.debug("Received request to process videos")
         data = request.json
@@ -107,17 +109,9 @@ def process_videos_route():
         logger.debug(f"Personal video S3 key: {personal_video_s3_key}")
         logger.debug(f"YouTube URL: {youtube_url}")
 
-        if not personal_video_s3_key:
-            logger.error("Personal video S3 key is missing")
-            return jsonify({'status': 'error', 'message': 'Personal video S3 key is required'}), 400
-
-        if not youtube_url:
-            logger.error("YouTube URL is missing")
-            return jsonify({'status': 'error', 'message': 'YouTube URL is required'}), 400
-
-        if not personal_video_thumbnail:
-            logger.error("Personal video thumbnail is missing")
-            return jsonify({'status': 'error', 'message': 'Personal video thumbnail is required'}), 400
+        if not personal_video_s3_key or not youtube_url or not personal_video_thumbnail:
+            logger.error("Missing required data")
+            return jsonify({'status': 'error', 'message': 'Personal video S3 key, YouTube URL, and personal video thumbnail are required'}), 400
 
         # Validate S3 key
         if not s3_client:
@@ -152,8 +146,8 @@ def process_videos_route():
         s3_client.download_file(S3_BUCKET, personal_video_s3_key, personal_video_path)
 
         # Process videos
-        output_path = os.path.join(app.config['UPLOAD_FOLDER'], f"processed_video_{uuid.uuid4()}.mp4")
-        processed_video_path = process_videos(personal_video_path, youtube_url, output_path)
+        processed_video_path = os.path.join(app.config['UPLOAD_FOLDER'], f"processed_video_{uuid.uuid4()}.mp4")
+        processed_video_path = process_videos(personal_video_path, youtube_url, processed_video_path)
 
         # Upload processed video to S3
         processed_video_s3_key = f"processed-videos/{os.path.basename(processed_video_path)}"
@@ -161,19 +155,6 @@ def process_videos_route():
 
         # Generate URL for the processed video
         processed_video_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{processed_video_s3_key}"
-
-        # Clean up temporary files
-        try:
-            os.remove(personal_video_path)
-            logger.info(f"Successfully deleted local personal video file: {personal_video_path}")
-        except Exception as e:
-            logger.error(f"Error deleting local personal video file: {str(e)}")
-
-        try:
-            os.remove(processed_video_path)
-            logger.info(f"Successfully deleted local processed video file: {processed_video_path}")
-        except Exception as e:
-            logger.error(f"Error deleting local processed video file: {str(e)}")
 
         # Clean up the original personal video from S3
         try:
@@ -195,6 +176,22 @@ def process_videos_route():
         logger.error(f"Error processing videos: {str(e)}")
         logger.error(traceback.format_exc())
         return jsonify({'status': 'error', 'message': f'An error occurred: {str(e)}. Please try again later.'}), 500
+
+    finally:
+        # Clean up temporary files
+        if personal_video_path and os.path.exists(personal_video_path):
+            try:
+                os.remove(personal_video_path)
+                logger.info(f"Successfully deleted local personal video file: {personal_video_path}")
+            except Exception as e:
+                logger.error(f"Error deleting local personal video file: {str(e)}")
+
+        if processed_video_path and os.path.exists(processed_video_path):
+            try:
+                os.remove(processed_video_path)
+                logger.info(f"Successfully deleted local processed video file: {processed_video_path}")
+            except Exception as e:
+                logger.error(f"Error deleting local processed video file: {str(e)}")
 
 @app.route('/get_youtube_info')
 def get_youtube_info():
