@@ -1,5 +1,7 @@
 import os
 import logging
+import uuid
+from pathlib import Path
 from flask import Flask, render_template, request, jsonify
 from botocore.exceptions import ClientError
 import boto3
@@ -39,7 +41,8 @@ def generate_presigned_url(file_name, file_type):
         logger.error("S3 client is not initialized")
         return None
 
-    s3_key = f"user-uploads/{file_name}-{os.urandom(16).hex()}"
+    unique_id = uuid.uuid4()
+    s3_key = f"user-uploads/{Path(file_name).stem}-{unique_id}{Path(file_name).suffix}"
     try:
         response = s3_client.generate_presigned_url(
             'put_object',
