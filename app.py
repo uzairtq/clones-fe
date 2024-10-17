@@ -166,13 +166,6 @@ def process_videos_route():
         os.remove(personal_video_path)
         os.remove(processed_video_path)
 
-        # Clean up the original personal video from S3
-        try:
-            s3_client.delete_object(Bucket=S3_BUCKET, Key=personal_video_s3_key)
-            logger.info(f"Successfully deleted original personal video from S3: {personal_video_s3_key}")
-        except Exception as e:
-            logger.error(f"Error deleting original personal video from S3: {str(e)}")
-
         logger.debug("Video processing completed successfully")
         return jsonify({
             'status': 'success',
