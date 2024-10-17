@@ -41,8 +41,7 @@ def generate_presigned_url(file_name, file_type):
         logger.error("S3 client is not initialized")
         return None
 
-    unique_id = uuid.uuid4()
-    s3_key = f"user-uploads/{Path(file_name).stem}-{unique_id}{Path(file_name).suffix}"
+    s3_key = f"user-uploads/{Path(file_name).stem}-{uuid.uuid4()}{Path(file_name).suffix}"
     try:
         response = s3_client.generate_presigned_url(
             'put_object',
