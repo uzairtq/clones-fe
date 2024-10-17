@@ -6,6 +6,7 @@ from flask import Flask, render_template, request, jsonify
 from botocore.exceptions import ClientError
 import boto3
 from utils.youtube_api import get_youtube_video_info
+from utils.video_processor import process_videos
 import traceback
 import psutil
 import isodate
@@ -95,7 +96,7 @@ def get_upload_url():
     })
 
 @app.route('/process_videos', methods=['POST'])
-def process_videos():
+def process_videos_route():
     try:
         logger.debug("Received request to process videos")
         data = request.json
@@ -146,14 +147,30 @@ def process_videos():
 
         logger.debug(f"YouTube video info: {youtube_info}")
 
-        # For now, we'll just return the personal video URL
-        uploaded_video_url = personal_video_url
+        # Download personal video from S3
+        personal_video_path = os.path.join(app.config['UPLOAD_FOLDER'], f"personal_video_{uuid.uuid4()}.mp4")
+        s3_client.download_file(S3_BUCKET, personal_video_s3_key, personal_video_path)
+
+        # Process videos
+        output_path = os.path.join(app.config['UPLOAD_FOLDER'], f"processed_video_{uuid.uuid4()}.mp4")
+        processed_video_path = process_videos(personal_video_path, youtube_url, output_path)
+
+        # Upload processed video to S3
+        processed_video_s3_key = f"processed-videos/{os.path.basename(processed_video_path)}"
+        s3_client.upload_file(processed_video_path, S3_BUCKET, processed_video_s3_key)
+
+        # Generate URL for the processed video
+        processed_video_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{processed_video_s3_key}"
+
+        # Clean up temporary files
+        os.remove(personal_video_path)
+        os.remove(processed_video_path)
 
         logger.debug("Video processing completed successfully")
         return jsonify({
             'status': 'success',
-            'message': 'Video uploaded successfully.',
-            'uploaded_video_url': uploaded_video_url,
+            'message': 'Video processed successfully.',
+            'uploaded_video_url': processed_video_url,
             'personal_video_thumbnail': thumbnail_url,
             'youtube_info': youtube_info
         })
