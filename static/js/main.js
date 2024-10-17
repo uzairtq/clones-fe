@@ -269,14 +269,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 const personalVideoUploadData = await getUploadUrl(personalVideo);
                 console.log('Upload URL:', personalVideoUploadData.uploadUrl);
                 await uploadFileToS3(personalVideo, personalVideoUploadData.uploadUrl);
-                formData.append('personal_video_s3_key', personalVideoUploadData.s3Key);
-                formData.append('personal_video_thumbnail', thumbnailDataUrl);
-
-                formData.append('youtube_url', youtubeUrl);
+                
+                // Update: Pass S3 location and YouTube URL to backend
+                const requestBody = {
+                    personal_video_s3_key: personalVideoUploadData.s3Key,
+                    personal_video_thumbnail: thumbnailDataUrl,
+                    youtube_url: youtubeUrl
+                };
 
                 const response = await fetchWithRetry('/process_videos', {
                     method: 'POST',
-                    body: formData
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody)
                 });
 
                 const data = await response.json();

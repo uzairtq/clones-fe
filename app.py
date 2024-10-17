@@ -98,9 +98,10 @@ def get_upload_url():
 def process_videos():
     try:
         logger.debug("Received request to process videos")
-        personal_video_s3_key = request.form.get('personal_video_s3_key')
-        youtube_url = request.form.get('youtube_url')
-        personal_video_thumbnail = request.form.get('personal_video_thumbnail')
+        data = request.json
+        personal_video_s3_key = data.get('personal_video_s3_key')
+        youtube_url = data.get('youtube_url')
+        personal_video_thumbnail = data.get('personal_video_thumbnail')
 
         logger.debug(f"Personal video S3 key: {personal_video_s3_key}")
         logger.debug(f"YouTube URL: {youtube_url}")
